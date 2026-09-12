@@ -1,0 +1,16 @@
+# Node dependencies
+node_modules/
+npm-debug.log
+
+# Build files
+dist/
+build/
+
+# Database & Environment
+*.sqlite
+.env
+
+# VS Code & OS files
+.vscode/
+.DS_Store
+Thumbs.db
