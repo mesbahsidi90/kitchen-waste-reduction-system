@@ -17,7 +17,7 @@ Set these only in Render. Never commit their real values:
 - `CORS_ORIGINS=https://kitzon-dashboard.pages.dev,https://kitzon-kiosk.pages.dev`
 - `AUTH_INVITE_REDIRECT_URL=https://kitzon-dashboard.pages.dev/accept-invite`
 
-The health check is `/health/ready` and the API base URL is expected to be `https://kitzon-api.onrender.com/api/v1` while the service name is available.
+The build explicitly installs development dependencies because TypeScript is compiled on Render before the production server starts. The health check is `/health/ready` and the API base URL is expected to be `https://kitzon-api.onrender.com/api/v1` while the service name is available.
 
 ## Cloudflare Pages builds
 
