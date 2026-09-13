@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Kitzon Kiosk",
+  "short_name": "Kitzon",
+  "description": "تسجيل هدر الطعام في المطبخ",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#08111f",
+  "theme_color": "#08111f",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

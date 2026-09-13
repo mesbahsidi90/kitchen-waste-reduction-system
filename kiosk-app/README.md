@@ -1,35 +1,37 @@
-# React + TypeScript + Vite
+# Kitzon Kiosk
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+واجهة لمس مختصرة لتسجيل هدر الطعام من ميزان المطبخ.
 
-Currently, two official plugins are available:
+## التشغيل المحلي
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+من جذر المشروع:
 
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm run dev --workspace kiosk-app
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+في وضع التطوير يظهر زر يولد وزنًا تجريبيًا، لذلك يمكن اختبار التدفق دون ميزان.
+
+## الإعداد
+
+- `VITE_API_BASE_URL`: عنوان API وينتهي بـ `/api/v1`.
+- `VITE_SCALE_ID`: رمز الميزان المسجل، مثل `SCALE_01`.
+- `VITE_DEVICE_TOKEN`: رمز الجهاز المطلوب لحفظ العمليات.
+- `VITE_SCALE_BAUD_RATE`: سرعة المنفذ التسلسلي، والقيمة الافتراضية `9600`.
+- `VITE_ENABLE_SCALE_SIMULATOR`: اجعلها `true` لإظهار زر التجربة في نسخة مبنية.
+
+لا تنشر نسخة تحتوي `VITE_DEVICE_TOKEN` للعامة؛ متغيرات Vite تصبح جزءًا من ملفات المتصفح. يلزم نظام تهيئة جهاز آمن قبل نشر نسخة الإنتاج.
+
+## الميزان
+
+اضغط «توصيل الميزان» واختر منفذ USB أو Bluetooth Serial. قارئ النسخة الحالية يتعامل مع أسطر تنتهي بـ `kg` أو `g`، مثل:
+
+```text
+ST,+1.250 kg
+```
+
+يجب اختبار صيغة البيانات وسرعة الاتصال مع موديل الميزان الحقيقي قبل اعتماده.
+
+## التثبيت
+
+نسخة الإنتاج PWA قابلة للتثبيت من Chrome على التابلت. ملف التعريف وخدمة التشغيل موجودان في `public/`.

@@ -1,61 +1,154 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createWasteLog } from "./api";
+import { connectToScale, isSerialSupported, type ScaleConnection } from "./serial-scale";
 import "./App.css";
 
 const SCALE_ID = import.meta.env.VITE_SCALE_ID ?? "SCALE_01";
+const ENABLE_SIMULATOR = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCALE_SIMULATOR === "true";
+
 const categories = [
-  { name: "خضروات وفواكه", color: "#2e7d32" },
-  { name: "لحوم ودواجن", color: "#c62828" },
-  { name: "مخبوزات", color: "#f57c00" },
-  { name: "وجبات مطبوخة", color: "#1565c0" },
+  { name: "خضروات وفواكه", color: "#16865b" },
+  { name: "لحوم ودواجن", color: "#b94747" },
+  { name: "مخبوزات", color: "#c97924" },
+  { name: "وجبات مطبوخة", color: "#347cc1" },
 ] as const;
-const reasons = [
-  "تالف / منتهي الصلاحية",
-  "بقايا تحضير (Trim)",
-  "بقايا صحون الزبائن",
-  "خطأ طهي",
-] as const;
+
+const reasons = ["تالف أو منتهي", "بقايا تحضير", "بقايا أطباق", "خطأ طهي"] as const;
 
 type Message = { kind: "idle" | "pending" | "success" | "error"; text: string };
+type ScaleState = "disconnected" | "connecting" | "connected" | "unsupported" | "error";
+
+const scaleLabels: Record<ScaleState, string> = {
+  disconnected: "الميزان غير متصل",
+  connecting: "جاري الاتصال…",
+  connected: "الميزان متصل",
+  unsupported: "الاتصال غير مدعوم",
+  error: "تعذر اتصال الميزان",
+};
 
 export default function App() {
-  const [weight, setWeight] = useState("1.2");
-  const [category, setCategory] = useState<string>(categories[0].name);
-  const [reason, setReason] = useState<string>(reasons[0]);
+  const [weight, setWeight] = useState(0);
+  const [category, setCategory] = useState<string | null>(null);
+  const [reason, setReason] = useState<string | null>(null);
   const [message, setMessage] = useState<Message>({ kind: "idle", text: "" });
+  const [scaleState, setScaleState] = useState<ScaleState>(() => isSerialSupported() ? "disconnected" : "unsupported");
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const connectionRef = useRef<ScaleConnection | null>(null);
   const pendingEventId = useRef<string | null>(null);
   const isSubmitting = message.kind === "pending";
 
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", updateOnlineState);
+    window.addEventListener("offline", updateOnlineState);
+
+    return () => {
+      window.removeEventListener("online", updateOnlineState);
+      window.removeEventListener("offline", updateOnlineState);
+      void connectionRef.current?.disconnect();
+    };
+  }, []);
+
+  async function handleScaleConnection() {
+    if (connectionRef.current) {
+      await connectionRef.current.disconnect();
+      connectionRef.current = null;
+      setScaleState("disconnected");
+      setWeight(0);
+      return;
+    }
+
+    setScaleState("connecting");
+    setMessage({ kind: "idle", text: "" });
+
+    try {
+      const connection = await connectToScale({
+        baudRate: Number(import.meta.env.VITE_SCALE_BAUD_RATE ?? 9600),
+        onWeight: setWeight,
+        onDisconnect: () => {
+          connectionRef.current = null;
+          setScaleState("disconnected");
+        },
+      });
+      connectionRef.current = connection;
+      setScaleState("connected");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotFoundError") {
+        setScaleState("disconnected");
+        return;
+      }
+      setScaleState("error");
+      setMessage({ kind: "error", text: "تعذر الاتصال بالميزان. تحقق من الكابل ثم حاول مجددًا." });
+    }
+  }
+
   async function handleSend() {
-    const weightKg = Number(weight);
-    if (!Number.isFinite(weightKg) || weightKg <= 0) {
-      setMessage({ kind: "error", text: "أدخل وزناً صحيحاً أكبر من صفر" });
+    if (weight <= 0) {
+      setMessage({ kind: "error", text: "ضع الهدر على الميزان أولًا." });
+      return;
+    }
+    if (!category || !reason) {
+      setMessage({ kind: "error", text: "اختر الصنف والسبب قبل التسجيل." });
+      return;
+    }
+    if (!isOnline) {
+      setMessage({ kind: "error", text: "لا يوجد اتصال بالإنترنت. أعد المحاولة بعد عودة الاتصال." });
       return;
     }
 
     setMessage({ kind: "pending", text: "جاري التسجيل…" });
     pendingEventId.current ??= crypto.randomUUID();
+
     try {
-      await createWasteLog({ client_event_id: pendingEventId.current, scale_id: SCALE_ID, weight_kg: weightKg, category, reason });
+      await createWasteLog({
+        client_event_id: pendingEventId.current,
+        scale_id: SCALE_ID,
+        weight_kg: weight,
+        category,
+        reason,
+      });
       pendingEventId.current = null;
+      setCategory(null);
+      setReason(null);
       setMessage({ kind: "success", text: "تم تسجيل الهدر بنجاح" });
     } catch {
-      setMessage({ kind: "error", text: "تعذر الاتصال بالخادم. حاول مرة أخرى." });
+      setMessage({ kind: "error", text: "تعذر الاتصال بالخادم. اضغط تسجيل للمحاولة مجددًا." });
     }
   }
 
   return (
     <main className="kiosk-shell" dir="rtl">
+      <header className="app-header">
+        <div>
+          <strong>Kitzon</strong>
+          <span>تسجيل الهدر</span>
+        </div>
+        <div className="status-strip" aria-label="حالة النظام">
+          <span className={isOnline ? "online" : "offline"}>{isOnline ? "متصل" : "دون إنترنت"}</span>
+          <span className={scaleState === "connected" ? "online" : "offline"}>{scaleLabels[scaleState]}</span>
+        </div>
+      </header>
+
       <section className="weight-panel" aria-labelledby="weight-title">
-        <p id="weight-title">الوزن الملتقط من الميزان</p>
-        <output className="weight-value">{weight} <small>كجم</small></output>
-        <button className="simulate-button" type="button" onClick={() => setWeight((Math.random() * 3 + 0.2).toFixed(3))}>
-          محاكاة تغيير الوزن
+        <p id="weight-title">الوزن</p>
+        <output className="weight-value">{weight.toFixed(3)} <small>كجم</small></output>
+        <button
+          className="scale-button"
+          type="button"
+          disabled={scaleState === "connecting" || scaleState === "unsupported"}
+          onClick={() => void handleScaleConnection()}
+        >
+          {scaleState === "connected" ? "فصل الميزان" : "توصيل الميزان"}
         </button>
+        {ENABLE_SIMULATOR && scaleState !== "connected" && (
+          <button className="simulate-button" type="button" onClick={() => setWeight(Number((Math.random() * 3 + 0.2).toFixed(3)))}>
+            تجربة وزن عشوائي
+          </button>
+        )}
       </section>
 
       <section aria-labelledby="category-title">
-        <h2 id="category-title">1. اختر نوع الهدر</h2>
+        <h2 id="category-title"><span>1</span> اختر الصنف</h2>
         <div className="option-grid category-grid">
           {categories.map((item) => (
             <button
@@ -63,7 +156,7 @@ export default function App() {
               key={item.name}
               type="button"
               aria-pressed={category === item.name}
-              onClick={() => setCategory(item.name)}
+              onClick={() => { setCategory(item.name); setMessage({ kind: "idle", text: "" }); }}
               style={{ "--selected-color": item.color } as CSSProperties}
             >
               {item.name}
@@ -73,10 +166,16 @@ export default function App() {
       </section>
 
       <section aria-labelledby="reason-title">
-        <h2 id="reason-title">2. اختر السبب</h2>
+        <h2 id="reason-title"><span>2</span> اختر السبب</h2>
         <div className="option-grid">
           {reasons.map((item) => (
-            <button className="option-button reason-button" key={item} type="button" aria-pressed={reason === item} onClick={() => setReason(item)}>
+            <button
+              className="option-button reason-button"
+              key={item}
+              type="button"
+              aria-pressed={reason === item}
+              onClick={() => { setReason(item); setMessage({ kind: "idle", text: "" }); }}
+            >
               {item}
             </button>
           ))}
@@ -84,7 +183,7 @@ export default function App() {
       </section>
 
       <button className="submit-button" type="button" disabled={isSubmitting} onClick={() => void handleSend()}>
-        {isSubmitting ? "جاري التسجيل…" : "تأكيد وتسجيل الهدر"}
+        {isSubmitting ? "جاري التسجيل…" : `تسجيل ${weight.toFixed(3)} كجم`}
       </button>
 
       {message.text && <p className={`status-message ${message.kind}`} role="status" aria-live="polite">{message.text}</p>}
