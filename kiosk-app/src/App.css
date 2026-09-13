@@ -43,6 +43,7 @@ h2 { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; font-size: 
 h2 span { display: grid; width: 30px; height: 30px; place-items: center; color: #06241c; background: #58e0c0; border-radius: 50%; font-size: 16px; }
 .option-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px; }
 .option-button { min-height: 72px; padding: 12px; color: #fff; background: #121e30; border: 2px solid #31445e; border-radius: 13px; font-size: 17px; font-weight: 750; }
+.empty-options { grid-column: 1 / -1; margin: 0; padding: 22px; border: 1px dashed #31445e; border-radius: 13px; color: #8d9bb0; text-align: center; }
 .category-button { min-height: 86px; font-size: 19px; }
 .category-button[aria-pressed="true"] { background: var(--selected-color); border-color: #fff; box-shadow: 0 0 0 2px var(--selected-color); }
 .reason-button[aria-pressed="true"] { color: #071b16; background: #58e0c0; border-color: #9affdf; }

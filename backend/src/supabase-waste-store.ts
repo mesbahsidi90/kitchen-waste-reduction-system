@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   ApplicationError,
+  type DeviceCatalog,
   type ListWasteLogsQuery,
   type RequestContext,
   type WasteLog,
@@ -208,6 +209,42 @@ export class SupabaseWasteStore implements WasteStore {
     const { data, error } = await this.userClient(accessToken).rpc("get_waste_summary");
     if (error || !data) throw new ApplicationError(503, "DATABASE_ERROR", "تعذر حساب الإحصائيات");
     return data as WasteSummary;
+  }
+
+  async catalog(context: RequestContext): Promise<DeviceCatalog> {
+    const deviceToken = requireContextValue(context.deviceToken, "بيانات اعتماد الجهاز مطلوبة");
+    const device = await this.authenticateDevice(deviceToken);
+    const [categoriesResult, reasonsResult] = await Promise.all([
+      this.adminClient
+        .from("categories")
+        .select("id, name, color")
+        .eq("organization_id", device.organization_id)
+        .eq("branch_id", device.branch_id)
+        .eq("is_active", true)
+        .order("name"),
+      this.adminClient
+        .from("waste_reasons")
+        .select("id, name")
+        .eq("organization_id", device.organization_id)
+        .eq("branch_id", device.branch_id)
+        .eq("is_active", true)
+        .order("name"),
+    ]);
+
+    if (categoriesResult.error || reasonsResult.error) {
+      throw new ApplicationError(503, "DATABASE_ERROR", "تعذر قراءة قائمة الفرع");
+    }
+
+    await this.adminClient
+      .from("devices")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", device.id);
+
+    return {
+      scale_id: device.code,
+      categories: categoriesResult.data ?? [],
+      reasons: reasonsResult.data ?? [],
+    };
   }
 
   async ready() {

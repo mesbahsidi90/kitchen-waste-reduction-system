@@ -172,7 +172,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
       case "devices":
         return <DevicesPage workspace={workspace} />;
       case "catalog":
-        return <CatalogPage workspace={workspace} />;
+        return <CatalogPage workspace={workspace} onChanged={async () => { await loadWorkspace(); }} />;
       case "thresholds":
         return <ThresholdsPage workspace={workspace} />;
       default:

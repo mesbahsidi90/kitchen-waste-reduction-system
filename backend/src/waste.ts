@@ -30,6 +30,14 @@ function requestContext(response: Parameters<RequestHandler>[1]): RequestContext
 export function createWasteRouter(store: WasteStore, options: WasteRouterOptions) {
   const router = Router();
 
+  router.get("/catalog", options.requireDevice, async (_request, response, next) => {
+    try {
+      response.json({ data: await store.catalog(requestContext(response)) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/waste-logs", options.requireDevice, async (request, response, next) => {
     try {
       const input = createWasteLogSchema.parse(request.body);

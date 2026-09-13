@@ -15,7 +15,7 @@ import {
   type PlatformOverview,
   type WasteLog,
 } from "./api";
-import type { WorkspaceData } from "./workspace";
+import { createCategory, setCategoryActive, type WorkspaceData } from "./workspace";
 
 const WasteChart = lazy(() => import("./WasteChart"));
 
@@ -143,12 +143,67 @@ export function DevicesPage({ workspace }: { workspace: WorkspaceData }) {
   );
 }
 
-export function CatalogPage({ workspace }: { workspace: WorkspaceData }) {
-  const lists = [
-    { title: "أصناف الطعام", items: workspace.categories, colored: true },
-    { title: "أسباب الهدر", items: workspace.reasons, colored: false },
-  ];
-  return <section className="catalog-grid">{lists.map((list) => <article className="panel" key={list.title}><div className="panel-heading"><div><span className="section-kicker">القائمة التشغيلية</span><h2>{list.title}</h2></div><span className="count-chip">{list.items.length.toLocaleString("ar-EG")}</span></div>{list.items.length === 0 ? <EmptyState title={`لا توجد ${list.title}`} description="ستظهر العناصر المضافة لهذا الفرع هنا." /> : <ul className="catalog-list">{list.items.map((item) => <li key={item.id}><span className="catalog-name">{list.colored && <i style={{ backgroundColor: item.color ?? "#64748b" }} />}{item.name}</span><StatusBadge active={item.is_active} /></li>)}</ul>}</article>)}</section>;
+export function CatalogPage({ workspace, onChanged }: { workspace: WorkspaceData; onChanged: () => Promise<void> }) {
+  const availableBranches = workspace.branches.filter((branch) => branch.status === "active");
+  const [branchId, setBranchId] = useState(workspace.assignedBranchId ?? availableBranches[0]?.id ?? "");
+  const [name, setName] = useState("");
+  const [color, setColor] = useState("#16865b");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const branchNames = new Map(workspace.branches.map((branch) => [branch.id, branch.name]));
+
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await createCategory(workspace, { branchId, name, color });
+      setName("");
+      setSuccess("تمت إضافة الصنف وسيظهر على جهاز الفرع.");
+      await onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر إضافة الصنف");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleCategory(categoryId: string, active: boolean) {
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await setCategoryActive(workspace, categoryId, active);
+      setSuccess(active ? "تم تفعيل الصنف." : "تم إيقاف الصنف ولن يظهر على الكيوسك.");
+      await onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر تحديث الصنف");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <section className="catalog-grid">
+    <article className="panel">
+      <div className="panel-heading"><div><span className="section-kicker">يديرها مدير المطبخ</span><h2>أصناف الطعام</h2></div><span className="count-chip">{workspace.categories.length.toLocaleString("ar-EG")}</span></div>
+      {availableBranches.length > 0 && <form className="catalog-form" onSubmit={(event) => void add(event)}>
+        <label>اسم الصنف<input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required placeholder="مثال: منتجات الألبان" /></label>
+        {workspace.role === "organization_owner" && <label>الفرع<select value={branchId} onChange={(event) => setBranchId(event.target.value)} required>{availableBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
+        <label className="color-field">اللون<input type="color" value={color} onChange={(event) => setColor(event.target.value)} aria-label="لون الصنف" /></label>
+        <button className="primary-action" type="submit" disabled={saving || !name.trim() || !branchId}>{saving ? "جاري الحفظ…" : "إضافة الصنف"}</button>
+      </form>}
+      {error && <p className="form-error">{error}</p>}
+      {success && <p className="success-banner">{success}</p>}
+      {workspace.categories.length === 0 ? <EmptyState title="لا توجد أصناف طعام" description="أضف أول صنف ليظهر في تطبيق الكيوسك." /> : <ul className="catalog-list">{workspace.categories.map((item) => <li key={item.id}><span className="catalog-name"><i style={{ backgroundColor: item.color ?? "#64748b" }} /><span>{item.name}<small>{branchNames.get(item.branch_id) ?? "—"}</small></span></span><div className="catalog-actions"><StatusBadge active={item.is_active} /><button type="button" className="secondary-action compact-action" disabled={saving} onClick={() => void toggleCategory(item.id, !item.is_active)}>{item.is_active ? "إيقاف" : "تفعيل"}</button></div></li>)}</ul>}
+    </article>
+
+    <article className="panel">
+      <div className="panel-heading"><div><span className="section-kicker">قائمة ثابتة حاليًا</span><h2>أسباب الهدر</h2></div><span className="count-chip">{workspace.reasons.length.toLocaleString("ar-EG")}</span></div>
+      {workspace.reasons.length === 0 ? <EmptyState title="لا توجد أسباب هدر" description="يجب تهيئة أسباب الهدر لهذا الفرع." /> : <ul className="catalog-list">{workspace.reasons.map((item) => <li key={item.id}><span className="catalog-name"><span>{item.name}<small>{branchNames.get(item.branch_id) ?? "—"}</small></span></span><StatusBadge active={item.is_active} /></li>)}</ul>}
+    </article>
+  </section>;
 }
 
 export function ThresholdsPage({ workspace }: { workspace: WorkspaceData }) {

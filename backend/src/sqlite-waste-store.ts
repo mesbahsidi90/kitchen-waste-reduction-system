@@ -1,6 +1,7 @@
 import type { AppDatabase } from "./database.js";
 import type {
   ListWasteLogsQuery,
+  DeviceCatalog,
   RequestContext,
   WasteLog,
   WasteLogInput,
@@ -83,6 +84,24 @@ export class SqliteWasteStore implements WasteStore {
         weight_kg: row.weight_grams / 1_000,
         count: row.count,
       })),
+    };
+  }
+
+  async catalog(_context: RequestContext): Promise<DeviceCatalog> {
+    return {
+      scale_id: "SCALE_01",
+      categories: [
+        { id: "vegetables", name: "خضروات وفواكه", color: "#16865b" },
+        { id: "meat", name: "لحوم ودواجن", color: "#b94747" },
+        { id: "bakery", name: "مخبوزات", color: "#c97924" },
+        { id: "cooked", name: "وجبات مطبوخة", color: "#347cc1" },
+      ],
+      reasons: [
+        { id: "expired", name: "تالف / منتهي الصلاحية" },
+        { id: "trim", name: "بقايا تحضير (Trim)" },
+        { id: "plates", name: "بقايا صحون الزبائن" },
+        { id: "cooking", name: "خطأ طهي" },
+      ],
     };
   }
 

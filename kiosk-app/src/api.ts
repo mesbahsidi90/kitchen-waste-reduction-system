@@ -8,6 +8,18 @@ export type WasteLogInput = {
   reason: string;
 };
 
+export type CatalogItem = {
+  id: string;
+  name: string;
+  color?: string;
+};
+
+export type DeviceCatalog = {
+  scale_id: string;
+  categories: CatalogItem[];
+  reasons: CatalogItem[];
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api/v1",
   timeout: 10_000,
@@ -21,4 +33,9 @@ const api = axios.create({
 
 export async function createWasteLog(input: WasteLogInput) {
   await api.post("/waste-logs", input);
+}
+
+export async function getDeviceCatalog() {
+  const response = await api.get<{ data: DeviceCatalog }>("/catalog");
+  return response.data.data;
 }

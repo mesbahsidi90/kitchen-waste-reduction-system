@@ -1,19 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { createWasteLog } from "./api";
+import { createWasteLog, getDeviceCatalog, type CatalogItem } from "./api";
 import { connectToScale, isSerialSupported, type ScaleConnection } from "./serial-scale";
 import "./App.css";
 
 const SCALE_ID = import.meta.env.VITE_SCALE_ID ?? "SCALE_01";
 const ENABLE_SIMULATOR = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCALE_SIMULATOR === "true";
-
-const categories = [
-  { name: "خضروات وفواكه", color: "#16865b" },
-  { name: "لحوم ودواجن", color: "#b94747" },
-  { name: "مخبوزات", color: "#c97924" },
-  { name: "وجبات مطبوخة", color: "#347cc1" },
-] as const;
-
-const reasons = ["تالف أو منتهي", "بقايا تحضير", "بقايا أطباق", "خطأ طهي"] as const;
 
 type Message = { kind: "idle" | "pending" | "success" | "error"; text: string };
 type ScaleState = "disconnected" | "connecting" | "connected" | "unsupported" | "error";
@@ -28,6 +19,9 @@ const scaleLabels: Record<ScaleState, string> = {
 
 export default function App() {
   const [weight, setWeight] = useState(0);
+  const [categories, setCategories] = useState<CatalogItem[]>([]);
+  const [reasons, setReasons] = useState<CatalogItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [category, setCategory] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [message, setMessage] = useState<Message>({ kind: "idle", text: "" });
@@ -47,6 +41,24 @@ export default function App() {
       window.removeEventListener("offline", updateOnlineState);
       void connectionRef.current?.disconnect();
     };
+  }, []);
+
+  useEffect(() => {
+    async function loadCatalog() {
+      setCatalogLoading(true);
+      try {
+        const catalog = await getDeviceCatalog();
+        setCategories(catalog.categories);
+        setReasons(catalog.reasons);
+        setMessage({ kind: "idle", text: "" });
+      } catch {
+        setMessage({ kind: "error", text: "تعذر تحميل أصناف الفرع. تحقق من إعداد الجهاز ثم أعد المحاولة." });
+      } finally {
+        setCatalogLoading(false);
+      }
+    }
+
+    void loadCatalog();
   }, []);
 
   async function handleScaleConnection() {
@@ -157,11 +169,13 @@ export default function App() {
               type="button"
               aria-pressed={category === item.name}
               onClick={() => { setCategory(item.name); setMessage({ kind: "idle", text: "" }); }}
-              style={{ "--selected-color": item.color } as CSSProperties}
+              style={{ "--selected-color": item.color ?? "#16865b" } as CSSProperties}
             >
               {item.name}
             </button>
           ))}
+          {!catalogLoading && categories.length === 0 && <p className="empty-options">لا توجد أصناف مفعّلة لهذا الفرع.</p>}
+          {catalogLoading && <p className="empty-options">جاري تحميل الأصناف…</p>}
         </div>
       </section>
 
@@ -171,14 +185,16 @@ export default function App() {
           {reasons.map((item) => (
             <button
               className="option-button reason-button"
-              key={item}
+              key={item.id}
               type="button"
-              aria-pressed={reason === item}
-              onClick={() => { setReason(item); setMessage({ kind: "idle", text: "" }); }}
+              aria-pressed={reason === item.name}
+              onClick={() => { setReason(item.name); setMessage({ kind: "idle", text: "" }); }}
             >
-              {item}
+              {item.name}
             </button>
           ))}
+          {!catalogLoading && reasons.length === 0 && <p className="empty-options">لا توجد أسباب هدر مفعّلة لهذا الفرع.</p>}
+          {catalogLoading && <p className="empty-options">جاري تحميل الأسباب…</p>}
         </div>
       </section>
 

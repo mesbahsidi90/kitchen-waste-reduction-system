@@ -49,6 +49,17 @@ describe("waste API", () => {
     expect(listed.body.data).toHaveLength(1);
   });
 
+  it("returns the active device catalog used by the kiosk", async () => {
+    const response = await request(app).get("/api/v1/catalog");
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.scale_id).toBe("SCALE_01");
+    expect(response.body.data.categories[0]).toMatchObject({ name: "خضروات وفواكه" });
+    expect(response.body.data.reasons[0]).toMatchObject({ name: "تالف / منتهي الصلاحية" });
+    expect(response.body.data.categories).toHaveLength(4);
+    expect(response.body.data.reasons).toHaveLength(4);
+  });
+
   it("rejects invalid and negative weights", async () => {
     const response = await request(app).post("/api/v1/waste-logs").send({
       client_event_id: "00000000-0000-4000-8000-000000000002",

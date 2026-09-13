@@ -146,3 +146,40 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
     thresholds: (thresholdsResult.data ?? []) as ThresholdRule[],
   };
 }
+
+function requireSupabaseClient() {
+  if (!supabase) throw new Error("إدارة الأصناف متاحة بعد تسجيل الدخول فقط");
+  return supabase;
+}
+
+export async function createCategory(
+  workspace: WorkspaceData,
+  input: { branchId: string; name: string; color: string },
+) {
+  const branch = workspace.branches.find((item) => item.id === input.branchId && item.status === "active");
+  if (!branch) throw new Error("اختر فرعًا نشطًا");
+
+  const name = input.name.trim();
+  if (!name || name.length > 100) throw new Error("اسم الصنف يجب أن يكون بين 1 و100 حرف");
+
+  const { error } = await requireSupabaseClient().from("categories").insert({
+    organization_id: workspace.organization.id,
+    branch_id: branch.id,
+    name,
+    color: input.color,
+  });
+  if (error?.code === "23505") throw new Error("هذا الصنف موجود بالفعل في الفرع");
+  if (error) throw new Error("تعذر إضافة الصنف");
+}
+
+export async function setCategoryActive(workspace: WorkspaceData, categoryId: string, isActive: boolean) {
+  const category = workspace.categories.find((item) => item.id === categoryId);
+  if (!category) throw new Error("الصنف غير موجود");
+
+  const { error } = await requireSupabaseClient()
+    .from("categories")
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", category.id)
+    .eq("organization_id", workspace.organization.id);
+  if (error) throw new Error("تعذر تحديث حالة الصنف");
+}

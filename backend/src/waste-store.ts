@@ -17,6 +17,18 @@ export type WasteSummary = {
   categories: Array<{ category: string; weight_kg: number; count: number }>;
 };
 
+export type CatalogItem = {
+  id: string;
+  name: string;
+  color?: string;
+};
+
+export type DeviceCatalog = {
+  scale_id: string;
+  categories: CatalogItem[];
+  reasons: CatalogItem[];
+};
+
 export type RequestContext = {
   accessToken?: string;
   deviceToken?: string;
@@ -34,6 +46,7 @@ export interface WasteStore {
     context: RequestContext,
   ): Promise<{ logs: WasteLog[]; total: number }>;
   summary(context: RequestContext): Promise<WasteSummary>;
+  catalog(context: RequestContext): Promise<DeviceCatalog>;
   ready(): Promise<void>;
   close(): Promise<void>;
 }

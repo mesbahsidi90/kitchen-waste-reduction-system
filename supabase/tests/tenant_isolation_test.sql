@@ -1,9 +1,10 @@
 begin;
-select plan(10);
+select plan(14);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-000000000001', 'owner-one@example.test'),
-  ('20000000-0000-4000-8000-000000000002', 'owner-two@example.test');
+  ('20000000-0000-4000-8000-000000000002', 'owner-two@example.test'),
+  ('30000000-0000-4000-8000-000000000003', 'manager-one@example.test');
 
 insert into public.organizations (id, name, slug) values
   ('11000000-0000-4000-8000-000000000001', 'Restaurant One', 'restaurant-one'),
@@ -11,9 +12,11 @@ insert into public.organizations (id, name, slug) values
 insert into public.branches (id, organization_id, name) values
   ('11100000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 'Branch One'),
   ('22200000-0000-4000-8000-000000000002', '22000000-0000-4000-8000-000000000002', 'Branch Two');
-insert into public.memberships (user_id, organization_id, role) values
-  ('10000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 'organization_owner'),
-  ('20000000-0000-4000-8000-000000000002', '22000000-0000-4000-8000-000000000002', 'organization_owner');
+insert into public.memberships (user_id, organization_id, branch_id, role) values
+  ('10000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', null, 'organization_owner'),
+  ('20000000-0000-4000-8000-000000000002', '22000000-0000-4000-8000-000000000002', null, 'organization_owner'),
+  ('30000000-0000-4000-8000-000000000003', '11000000-0000-4000-8000-000000000001',
+    '11100000-0000-4000-8000-000000000001', 'branch_manager');
 insert into public.devices (id, organization_id, branch_id, code, name, api_key_hash) values
   ('11110000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', '11100000-0000-4000-8000-000000000001', 'SCALE_01', 'Scale One', repeat('a', 64)),
   ('22220000-0000-4000-8000-000000000002', '22000000-0000-4000-8000-000000000002', '22200000-0000-4000-8000-000000000002', 'SCALE_02', 'Scale Two', repeat('b', 64));
@@ -41,6 +44,7 @@ select is(
 );
 select ok(not has_table_privilege('anon', 'public.organizations', 'select'), 'anonymous users cannot read organizations');
 select ok(has_table_privilege('authenticated', 'public.waste_events', 'select'), 'authenticated users have explicit read grants');
+select ok(has_table_privilege('authenticated', 'public.categories', 'insert'), 'authenticated managers have an explicit category insert grant');
 select ok(not has_column_privilege('authenticated', 'public.devices', 'api_key_hash', 'select'), 'device hashes are not readable by clients');
 
 set local role authenticated;
@@ -67,6 +71,27 @@ select throws_ok(
   '42501',
   'new row violates row-level security policy for table "waste_events"',
   'a user cannot insert an event into another tenant'
+);
+
+select set_config('request.jwt.claims', '{"sub":"30000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+select lives_ok(
+  $$insert into public.categories (id, organization_id, branch_id, name)
+    values ('33333000-0000-4000-8000-000000000003', '11000000-0000-4000-8000-000000000001',
+      '11100000-0000-4000-8000-000000000001', 'Dairy')$$,
+  'a branch manager can add a category to the assigned branch'
+);
+select lives_ok(
+  $$update public.categories set is_active = false
+    where id = '33333000-0000-4000-8000-000000000003'$$,
+  'a branch manager can deactivate a category in the assigned branch'
+);
+select throws_ok(
+  $$insert into public.categories (organization_id, branch_id, name)
+    values ('22000000-0000-4000-8000-000000000002',
+      '22200000-0000-4000-8000-000000000002', 'Forbidden category')$$,
+  '42501',
+  'new row violates row-level security policy for table "categories"',
+  'a branch manager cannot add a category to another tenant'
 );
 
 select * from finish();
