@@ -5,8 +5,6 @@ import {
   requireSupabaseUser,
 } from "./auth.js";
 import { config } from "./config.js";
-import { createDatabase } from "./database.js";
-import { SqliteWasteStore } from "./sqlite-waste-store.js";
 import { SupabaseWasteStore } from "./supabase-waste-store.js";
 import { SupabasePlatformAdminService, type PlatformAdminService } from "./platform-admin.js";
 import type { WasteStore } from "./waste-store.js";
@@ -28,6 +26,10 @@ async function start() {
       inviteRedirectUrl: config.authInviteRedirectUrl,
     });
   } else {
+    const [{ createDatabase }, { SqliteWasteStore }] = await Promise.all([
+      import("./database.js"),
+      import("./sqlite-waste-store.js"),
+    ]);
     store = new SqliteWasteStore(await createDatabase(config.databasePath));
   }
 
