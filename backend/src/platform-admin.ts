@@ -63,6 +63,11 @@ export type InvitePlatformMemberInput = {
   branchId: string | null;
 };
 
+export type PendingInvitation = {
+  organizationName: string;
+  role: PlatformMember["role"];
+};
+
 export type PlatformMetrics = {
   organization_count: number;
   branch_count: number;
@@ -82,6 +87,8 @@ export interface PlatformAdminService {
   createOrganization(userId: string, input: CreatePlatformOrganizationInput): Promise<{ organizationId: string; ownerInvited: boolean }>;
   createBranch(userId: string, organizationId: string, input: { name: string; timezone: string }): Promise<{ branchId: string }>;
   inviteMember(userId: string, organizationId: string, input: InvitePlatformMemberInput): Promise<{ membershipId: string }>;
+  getPendingInvitation(userId: string): Promise<PendingInvitation>;
+  acceptInvitation(userId: string): Promise<{ activatedMemberships: number }>;
   updateOrganizationStatus(userId: string, organizationId: string, status: PlatformOrganization["status"]): Promise<void>;
   updateSubscription(
     userId: string,
@@ -90,12 +97,14 @@ export interface PlatformAdminService {
   ): Promise<void>;
 }
 
-type SupabaseOptions = { url: string; secretKey: string };
+type SupabaseOptions = { url: string; secretKey: string; inviteRedirectUrl: string };
 
 export class SupabasePlatformAdminService implements PlatformAdminService {
   private readonly client: SupabaseClient;
+  private readonly inviteRedirectUrl: string;
 
   constructor(options: SupabaseOptions) {
+    this.inviteRedirectUrl = options.inviteRedirectUrl;
     this.client = createClient(options.url, options.secretKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -162,6 +171,7 @@ export class SupabasePlatformAdminService implements PlatformAdminService {
     if (input.ownerEmail) {
       const inviteResult = await this.client.auth.admin.inviteUserByEmail(input.ownerEmail, {
         data: { organization_name: input.name },
+        redirectTo: this.inviteRedirectUrl,
       });
       if (inviteResult.error || !inviteResult.data.user) {
         const isExistingUser = inviteResult.error?.message.toLowerCase().includes("already");
@@ -234,6 +244,7 @@ export class SupabasePlatformAdminService implements PlatformAdminService {
 
     const inviteResult = await this.client.auth.admin.inviteUserByEmail(input.email, {
       data: { organization_name: organizationResult.data.name },
+      redirectTo: this.inviteRedirectUrl,
     });
     if (inviteResult.error || !inviteResult.data.user) {
       const existing = inviteResult.error?.message.toLowerCase().includes("already");
@@ -258,6 +269,60 @@ export class SupabasePlatformAdminService implements PlatformAdminService {
       throw new ApplicationError(503, "DATABASE_ERROR", "تعذر ربط المستخدم بالمؤسسة");
     }
     return { membershipId: result.data };
+  }
+
+  async acceptInvitation(userId: string) {
+    const userResult = await this.client.auth.admin.getUserById(userId);
+    if (userResult.error || !userResult.data.user) {
+      throw new ApplicationError(401, "INVALID_INVITATION_SESSION", "جلسة الدعوة غير صالحة");
+    }
+    if (!userResult.data.user.email_confirmed_at) {
+      throw new ApplicationError(403, "EMAIL_NOT_CONFIRMED", "يجب تأكيد البريد الإلكتروني من رابط الدعوة أولًا");
+    }
+
+    const result = await this.client
+      .from("memberships")
+      .update({ status: "active", updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .eq("status", "invited")
+      .select("id");
+    if (result.error) {
+      throw new ApplicationError(503, "DATABASE_ERROR", "تم تعيين كلمة المرور لكن تعذر تفعيل العضوية");
+    }
+    const activatedMemberships = result.data?.length ?? 0;
+    if (activatedMemberships === 0) {
+      throw new ApplicationError(409, "INVITATION_NOT_FOUND", "لا توجد دعوة معلّقة لهذا الحساب");
+    }
+    return { activatedMemberships };
+  }
+
+  async getPendingInvitation(userId: string): Promise<PendingInvitation> {
+    const membershipResult = await this.client
+      .from("memberships")
+      .select("organization_id, role")
+      .eq("user_id", userId)
+      .eq("status", "invited")
+      .limit(1)
+      .maybeSingle();
+    if (membershipResult.error) {
+      throw new ApplicationError(503, "DATABASE_ERROR", "تعذر التحقق من الدعوة");
+    }
+    if (!membershipResult.data) {
+      throw new ApplicationError(404, "INVITATION_NOT_FOUND", "لا توجد دعوة معلّقة لهذا الحساب");
+    }
+
+    const organizationResult = await this.client
+      .from("organizations")
+      .select("name")
+      .eq("id", membershipResult.data.organization_id)
+      .maybeSingle();
+    if (organizationResult.error || !organizationResult.data) {
+      throw new ApplicationError(503, "DATABASE_ERROR", "تعذر تحميل المؤسسة المرتبطة بالدعوة");
+    }
+    return {
+      organizationName: organizationResult.data.name,
+      role: membershipResult.data.role as PlatformMember["role"],
+    };
   }
 
   async updateOrganizationStatus(userId: string, organizationId: string, status: PlatformOrganization["status"]) {
@@ -360,6 +425,24 @@ function requirePlatformAdmin(service: PlatformAdminService): RequestHandler {
 
 export function createPlatformAdminRouter(service: PlatformAdminService, requireUser: RequestHandler) {
   const router = Router();
+  router.get("/invitations/current", requireUser, async (_request, response, next) => {
+    try {
+      const invitation = await service.getPendingInvitation(response.locals.userId as string);
+      response.json({ data: { organization_name: invitation.organizationName, role: invitation.role } });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/invitations/accept", requireUser, async (_request, response, next) => {
+    try {
+      const result = await service.acceptInvitation(response.locals.userId as string);
+      response.json({ data: { activated_memberships: result.activatedMemberships } });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.use(requireUser, requirePlatformAdmin(service));
 
   router.get("/overview", async (_request, response, next) => {

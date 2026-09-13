@@ -158,6 +158,23 @@ export async function invitePlatformMember(
   return response.data.data;
 }
 
+export async function acceptInvitation(accessToken: string) {
+  const response = await api.post<{ data: { activated_memberships: number } }>(
+    "/platform/invitations/accept",
+    undefined,
+    authorization(accessToken),
+  );
+  return response.data.data;
+}
+
+export async function getPendingInvitation(accessToken: string) {
+  const response = await api.get<{ data: { organization_name: string; role: PlatformMember["role"] } }>(
+    "/platform/invitations/current",
+    authorization(accessToken),
+  );
+  return response.data.data;
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string) {
   if (!axios.isAxiosError(error)) return fallback;
   const message = (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message;

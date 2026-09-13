@@ -25,6 +25,7 @@ async function start() {
     platformAdminService = new SupabasePlatformAdminService({
       url: config.supabase!.url,
       secretKey: config.supabase!.secretKey,
+      inviteRedirectUrl: config.authInviteRedirectUrl,
     });
   } else {
     store = new SqliteWasteStore(await createDatabase(config.databasePath));

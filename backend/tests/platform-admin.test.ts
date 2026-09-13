@@ -55,6 +55,8 @@ function fakeService(overrides: Partial<PlatformAdminService> = {}): PlatformAdm
     }),
     createBranch: vi.fn().mockResolvedValue({ branchId: "00000000-0000-4000-8000-000000000200" }),
     inviteMember: vi.fn().mockResolvedValue({ membershipId: "00000000-0000-4000-8000-000000000300" }),
+    getPendingInvitation: vi.fn().mockResolvedValue({ organizationName: "مطاعم النور", role: "branch_manager" }),
+    acceptInvitation: vi.fn().mockResolvedValue({ activatedMemberships: 1 }),
     updateOrganizationStatus: vi.fn().mockResolvedValue(undefined),
     updateSubscription: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -89,6 +91,24 @@ describe("platform administrator API", () => {
     const response = await request(testApp(fakeService())).get("/api/v1/platform/overview");
     expect(response.status).toBe(200);
     expect(response.body.data.metrics).toMatchObject({ organization_count: 1, device_count: 3 });
+  });
+
+  it("allows an invited user to activate only their own authenticated membership", async () => {
+    const service = fakeService({ isPlatformAdmin: vi.fn().mockResolvedValue(false) });
+    const response = await request(testApp(service)).post("/api/v1/platform/invitations/accept");
+    expect(response.status).toBe(200);
+    expect(response.body.data.activated_memberships).toBe(1);
+    expect(service.acceptInvitation).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001");
+    expect(service.isPlatformAdmin).not.toHaveBeenCalled();
+  });
+
+  it("returns only the pending invitation of the authenticated user", async () => {
+    const service = fakeService({ isPlatformAdmin: vi.fn().mockResolvedValue(false) });
+    const response = await request(testApp(service)).get("/api/v1/platform/invitations/current");
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ organization_name: "مطاعم النور", role: "branch_manager" });
+    expect(service.getPendingInvitation).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001");
+    expect(service.isPlatformAdmin).not.toHaveBeenCalled();
   });
 
   it("validates organization ids before changing status", async () => {

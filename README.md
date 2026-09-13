@@ -34,7 +34,7 @@ npm run supabase:reset
 npm run supabase:test
 ```
 
-2. انسخ القيم التي يعرضها `supabase start` إلى `.env`، واجعل `DATA_PROVIDER=supabase`. ضع عنوان المشروع والمفتاح القابل للنشر أيضاً في `dashboard/.env` مع `VITE_AUTH_MODE=supabase`.
+2. انسخ القيم التي يعرضها `supabase start` إلى `.env`، واجعل `DATA_PROVIDER=supabase`. ضع عنوان المشروع والمفتاح القابل للنشر أيضاً في `dashboard/.env` مع `VITE_AUTH_MODE=supabase`. اضبط `AUTH_INVITE_REDIRECT_URL` على رابط لوحة التحكم متبوعاً بـ `/accept-invite`.
 
 3. أنشئ مستخدماً في Supabase Auth، ثم هيّئ أول مطعم وفرع وجهاز باستخدام UUID ذلك المستخدم:
 
@@ -45,6 +45,10 @@ npm run supabase:bootstrap -- --user-id <auth-user-uuid> --organization-name "م
 يعرض السكربت رمز الجهاز مرة واحدة. ضعه في `kiosk-app/.env` باسم `VITE_DEVICE_TOKEN`. المفتاح السري `SUPABASE_SECRET_KEY` خاص بالخادم فقط، ويُمنع وضعه في تطبيقات React أو في Git.
 
 للربط بمشروع Supabase مستضاف، استخدم `npx supabase login` ثم `npx supabase link --project-ref <project-ref>` وطبّق migrations عبر `npx supabase db push`.
+
+### دعوات المستخدمين
+
+يُرسل الخادم الدعوات من بيئة موثوقة باستخدام مفتاح Supabase السري، ويوجّه الرابط إلى صفحة `/accept-invite` في لوحة التحكم. بعد فتح الرابط يعيّن المستخدم كلمة مرور قوية، ثم يفعّل الخادم عضويته المعلّقة فقط. يجب إضافة قيمة `AUTH_INVITE_REDIRECT_URL` نفسها إلى قائمة **Authentication > URL Configuration > Redirect URLs** في مشروع Supabase. في الإنتاج استخدم رابط HTTPS دقيقاً، واضبط SMTP مخصصاً لإرسال الدعوات إلى العملاء خارج فريق مشروع Supabase.
 
 ### نقل بيانات SQLite الحالية
 
