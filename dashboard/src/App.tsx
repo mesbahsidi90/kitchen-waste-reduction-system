@@ -184,7 +184,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
     <main className="app-shell" dir="rtl">
       <button className={`sidebar-overlay ${menuOpen ? "visible" : ""}`} aria-label="إغلاق القائمة" onClick={() => setMenuOpen(false)} />
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
-        <div className="brand"><span className="brand-mark">KW</span><div><strong>Kitchen Waste</strong><small>منصة إدارة الهدر</small></div></div>
+        <div className="brand"><span className="brand-mark">K</span><div><strong>Kitzon</strong><small>منصة إدارة الهدر</small></div></div>
         <div className="workspace-summary"><span>مساحة العمل</span><strong>{workspace?.organization.name ?? "جاري التحميل…"}</strong>{workspace && <small>{roleLabels[workspace.role]}</small>}</div>
         <nav aria-label="التنقل الرئيسي">
           <span className="nav-label">القائمة الرئيسية</span>

@@ -38,8 +38,8 @@ async function start() {
     requireDevice,
     platformAdminService,
   });
-  const server = app.listen(config.port, () => {
-    console.log(`API listening on http://localhost:${config.port}`);
+  const server = app.listen(config.port, "0.0.0.0", () => {
+    console.log(`Kitzon API listening on port ${config.port}`);
   });
 
   async function shutdown(signal: string) {

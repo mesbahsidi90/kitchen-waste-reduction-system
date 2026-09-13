@@ -32,7 +32,7 @@ function passwordValidationError(password: string, confirmation: string) {
 }
 
 function Brand() {
-  return <div className="login-brand"><span className="brand-mark">KW</span><div><strong>Kitchen Waste</strong><small>منصة إدارة الهدر</small></div></div>;
+  return <div className="login-brand"><span className="brand-mark">K</span><div><strong>Kitzon</strong><small>منصة إدارة الهدر</small></div></div>;
 }
 
 type InvitationDetails = { organization_name: string; role: PlatformMember["role"] };

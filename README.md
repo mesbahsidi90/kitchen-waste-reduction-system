@@ -1,4 +1,4 @@
-# IoT Kitchen Waste Reduction System
+# Kitzon — IoT Kitchen Waste Reduction System
 
 نظام لتسجيل وتحليل هدر الطعام في المطابخ التجارية. يتكون المستودع من API مركزي، وتطبيق Kiosk للعامل، ولوحة تحليلات. يدعم التشغيل المحلي السريع عبر SQLite أو التشغيل متعدد المطاعم والفروع عبر Supabase.
 

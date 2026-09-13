@@ -1,4 +1,4 @@
-# Kitchen Waste Dashboard
+# Kitzon Dashboard
 
 واجهة SaaS عربية متجاوبة لعرض بيانات الهدر وإدارة نطاق المؤسسة أو الفرع.
 
