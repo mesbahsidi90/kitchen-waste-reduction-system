@@ -1,16 +1,21 @@
-# React + Vite
+# Kitchen Waste Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+واجهة SaaS عربية متجاوبة لعرض بيانات الهدر وإدارة نطاق المؤسسة أو الفرع.
 
-Currently, two official plugins are available:
+## الصلاحيات
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `organization_owner`: نظرة شاملة على المؤسسة والفروع والأجهزة والقوائم وحدود التنبيه.
+- `branch_manager`: إدارة ومراقبة الفرع المرتبط بعضويته.
+- `worker`: عرض المؤشرات وسجل الهدر فقط.
 
-## React Compiler
+تُقرأ العضوية من جدول `memberships` وتُطبّق صلاحيات البيانات فعليًا بواسطة Supabase RLS. إخفاء عناصر التنقل في الواجهة مخصص لتحسين تجربة الاستخدام، وليس بديلًا عن سياسات قاعدة البيانات.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## التشغيل
 
-## Expanding the Oxlint configuration
+انسخ `.env.example` إلى `.env` واضبط رابط API وبيانات Supabase العامة، ثم شغّل من جذر المستودع:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+npm run dev:dashboard
+```
+
+لا تضع مفتاح Supabase السري أو `service_role` في متغيرات Vite؛ كل متغير يبدأ بـ `VITE_` يصل إلى المتصفح.

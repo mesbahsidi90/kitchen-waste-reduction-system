@@ -1,0 +1,33 @@
+{
+  "name": "kitchen-waste-reduction-system",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "kiosk-app",
+    "dashboard"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "check": "npm run lint && npm run test && npm run build",
+    "dev:api": "npm run dev --workspace backend",
+    "dev:kiosk": "npm run dev --workspace kiosk-app",
+    "dev:dashboard": "npm run dev --workspace dashboard",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset --local",
+    "supabase:test": "supabase test db --local",
+    "supabase:lint": "supabase db lint --local --schema public --fail-on error",
+    "supabase:bootstrap": "npm run supabase:bootstrap --workspace backend --",
+    "supabase:grant-admin": "npm run supabase:grant-admin --workspace backend --",
+    "supabase:migrate-sqlite": "npm run supabase:migrate-sqlite --workspace backend --"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "supabase": "2.117.0"
+  }
+}

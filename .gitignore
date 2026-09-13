@@ -8,7 +8,11 @@ build/
 
 # Database & Environment
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 .env
+.env.local
+coverage/
 
 # VS Code & OS files
 .vscode/

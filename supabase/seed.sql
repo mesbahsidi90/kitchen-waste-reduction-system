@@ -1,0 +1,2 @@
+-- Keep production tenant provisioning explicit through the backend bootstrap script.
+-- Add development-only fixtures here when local UI testing requires them.

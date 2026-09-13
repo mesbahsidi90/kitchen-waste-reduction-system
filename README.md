@@ -1,0 +1,88 @@
+# IoT Kitchen Waste Reduction System
+
+نظام لتسجيل وتحليل هدر الطعام في المطابخ التجارية. يتكون المستودع من API مركزي، وتطبيق Kiosk للعامل، ولوحة تحليلات. يدعم التشغيل المحلي السريع عبر SQLite أو التشغيل متعدد المطاعم والفروع عبر Supabase.
+
+## المتطلبات
+
+- Node.js 22 أو أحدث
+- npm 10 أو أحدث
+- Docker Desktop عند تشغيل Supabase محلياً
+
+## التشغيل المحلي
+
+```bash
+npm install
+npm run dev:api
+```
+
+ثم شغّل، في نافذتين منفصلتين:
+
+```bash
+npm run dev:kiosk
+npm run dev:dashboard
+```
+
+الإعدادات الافتراضية تستخدم SQLite ولا تتطلب تسجيل دخول. انسخ `.env.example` أو ملفات `.env.example` داخل التطبيقات عند الحاجة إلى تغيير عنوان API أو معرّف الميزان أو نطاقات CORS.
+
+## تشغيل Supabase
+
+1. شغّل البيئة المحلية وطبّق migrations:
+
+```bash
+npm run supabase:start
+npm run supabase:reset
+npm run supabase:test
+```
+
+2. انسخ القيم التي يعرضها `supabase start` إلى `.env`، واجعل `DATA_PROVIDER=supabase`. ضع عنوان المشروع والمفتاح القابل للنشر أيضاً في `dashboard/.env` مع `VITE_AUTH_MODE=supabase`.
+
+3. أنشئ مستخدماً في Supabase Auth، ثم هيّئ أول مطعم وفرع وجهاز باستخدام UUID ذلك المستخدم:
+
+```bash
+npm run supabase:bootstrap -- --user-id <auth-user-uuid> --organization-name "مطعمي" --organization-slug my-restaurant --branch-name "الفرع الرئيسي" --device-code SCALE_01
+```
+
+يعرض السكربت رمز الجهاز مرة واحدة. ضعه في `kiosk-app/.env` باسم `VITE_DEVICE_TOKEN`. المفتاح السري `SUPABASE_SECRET_KEY` خاص بالخادم فقط، ويُمنع وضعه في تطبيقات React أو في Git.
+
+للربط بمشروع Supabase مستضاف، استخدم `npx supabase login` ثم `npx supabase link --project-ref <project-ref>` وطبّق migrations عبر `npx supabase db push`.
+
+### نقل بيانات SQLite الحالية
+
+بعد تهيئة المطعم والجهاز، نفّذ:
+
+```bash
+npm run supabase:migrate-sqlite -- --organization-id <uuid> --branch-id <uuid> --device-id <uuid> --database ./backend/data/database.sqlite
+```
+
+العملية قابلة لإعادة التشغيل دون تكرار سجلات الهدر. ولحماية دقة البيانات، تتوقف إذا وجدت معرف ميزان قديم لا يطابق الجهاز المستهدف.
+
+## التحقق
+
+```bash
+npm run check
+```
+
+يشغّل هذا الأمر فحص الكود والاختبارات وبناء التطبيقات الثلاثة.
+
+تتطلب اختبارات عزل المستأجرين وقواعد RLS تشغيل Supabase المحلي:
+
+```bash
+npm run supabase:test
+npm run supabase:lint
+```
+
+## نقاط API
+
+- `GET /health/live`
+- `GET /health/ready`
+- `POST /api/v1/waste-logs`
+- `GET /api/v1/waste-logs?limit=50&offset=0`
+- `GET /api/v1/analytics/summary`
+
+عند `DATA_PROVIDER=supabase` تتطلب عمليات القراءة Bearer token صالحاً من Supabase Auth، وتتطلب عمليات التسجيل من الكشك رمز جهاز مستقل بصيغة `Device <token>`. تطبّق قاعدة البيانات عزل المطاعم والفروع بواسطة RLS، ولا يُرسل المفتاح السري إلى المتصفح.
+
+قاعدة SQLite المحلية محفوظة افتراضياً في `backend/data/database.sqlite`. عند اكتشاف جدول MVP القديم، ينقل التطبيق السجلات الصالحة تلقائياً إلى المخطط المحلي الذي يخزن الوزن بالجرام.
+
+## نموذج Supabase
+
+يتضمن المخطط Organizations وBranches وMemberships وأدوار `organization_owner` و`branch_manager` و`worker`، إضافة إلى الأجهزة، الأصناف، الأسباب، سجلات الهدر، حدود التنبيه، وسجل التدقيق. توجد اختبارات pgTAP تمنع وصول مستخدم إلى بيانات مستأجر آخر وتتحقق من عدم كشف بصمة اعتماد الجهاز.
