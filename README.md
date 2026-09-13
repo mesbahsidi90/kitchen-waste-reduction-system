@@ -2,6 +2,12 @@
 
 نظام لتسجيل وتحليل هدر الطعام في المطابخ التجارية. يتكون المستودع من API مركزي، وتطبيق Kiosk للعامل، ولوحة تحليلات. يدعم التشغيل المحلي السريع عبر SQLite أو التشغيل متعدد المطاعم والفروع عبر Supabase.
 
+## بيئة التجربة المنشورة
+
+- لوحة التحكم: <https://kitzon-dashboard.pages.dev>
+- تطبيق الكيوسك: <https://kitzon-kiosk.pages.dev>
+- حالة API: <https://kitzon-api.onrender.com/health/ready>
+
 ## المتطلبات
 
 - Node.js 22 أو أحدث
