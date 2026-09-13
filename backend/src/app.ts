@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { ZodError } from "zod";
 import { createWasteRouter } from "./waste.js";
 import { createPlatformAdminRouter, type PlatformAdminService } from "./platform-admin.js";
+import { createDeviceProvisioningRouter, type DeviceProvisioningService } from "./device-provisioning.js";
 import { ApplicationError, type WasteStore } from "./waste-store.js";
 
 type AppOptions = {
@@ -11,6 +12,7 @@ type AppOptions = {
   requireUser: RequestHandler;
   requireDevice: RequestHandler;
   platformAdminService?: PlatformAdminService;
+  deviceProvisioningService?: DeviceProvisioningService;
 };
 
 export function createApp(store: WasteStore, options: AppOptions) {
@@ -43,6 +45,9 @@ export function createApp(store: WasteStore, options: AppOptions) {
   });
 
   app.use("/api/v1", createWasteRouter(store, options));
+  if (options.deviceProvisioningService) {
+    app.use("/api/v1/devices", createDeviceProvisioningRouter(options.deviceProvisioningService, options.requireUser));
+  }
   if (options.platformAdminService) {
     app.use("/api/v1/platform", createPlatformAdminRouter(options.platformAdminService, options.requireUser));
   }

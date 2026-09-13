@@ -167,6 +167,20 @@ tbody tr:hover { background: rgb(255 255 255 / .018); }
 .device-card dt, .device-card dd { margin: 0; font-size: 10px; }
 .device-card dt { color: #718198; }
 .device-card dd { color: #b5c0d0; text-align: left; }
+.device-form { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, .7fr) auto; align-items: end; gap: 12px; }
+.device-form label { display: grid; gap: 7px; color: #aab6c6; font-size: 10px; font-weight: 800; }
+.device-form input, .device-form select { min-width: 0; padding: 10px 11px; border: 1px solid #304058; border-radius: 9px; color: #e5ebf3; background: #0d1523; font: inherit; }
+.pairing-banner { display: flex; align-items: center; gap: 22px; margin-top: 16px; padding: 18px; border: 1px solid rgb(52 211 153 / .32); border-radius: 13px; background: rgb(16 185 129 / .08); }
+.pairing-banner div { flex: 0 0 auto; }
+.pairing-banner span { display: block; margin-bottom: 7px; color: #a7f3d0; font-size: 10px; }
+.pairing-banner strong { color: #6ee7b7; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 27px; letter-spacing: .12em; }
+.pairing-banner p { margin: 0; color: #9aa7b8; font-size: 10px; line-height: 1.8; }
+.device-disable { width: 100%; margin-top: 14px; color: #fda4af; border-color: rgb(244 63 94 / .2); }
+
+@media (max-width: 760px) {
+  .device-form { grid-template-columns: 1fr; }
+  .pairing-banner { align-items: flex-start; flex-direction: column; gap: 10px; }
+}
 .catalog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .catalog-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
 .catalog-list li { display: flex; align-items: center; justify-content: space-between; padding: 12px 3px; border-bottom: 1px solid #202c3d; }

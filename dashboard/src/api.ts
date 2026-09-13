@@ -167,6 +167,29 @@ export async function acceptInvitation(accessToken: string) {
   return response.data.data;
 }
 
+export type DevicePairing = {
+  device_id: string;
+  device_code: string;
+  pairing_code: string;
+  expires_at: string;
+};
+
+export async function createTenantDevice(
+  accessToken: string,
+  input: { branchId: string; name: string },
+) {
+  const response = await api.post<{ data: DevicePairing }>(
+    "/devices",
+    input,
+    authorization(accessToken),
+  );
+  return response.data.data;
+}
+
+export async function disableTenantDevice(accessToken: string, deviceId: string) {
+  await api.patch(`/devices/${deviceId}/disable`, undefined, authorization(accessToken));
+}
+
 export async function getPendingInvitation(accessToken: string) {
   const response = await api.get<{ data: { organization_name: string; role: PlatformMember["role"] } }>(
     "/platform/invitations/current",

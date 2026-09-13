@@ -170,7 +170,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
       case "branches":
         return <BranchesPage workspace={workspace} />;
       case "devices":
-        return <DevicesPage workspace={workspace} />;
+        return <DevicesPage workspace={workspace} accessToken={auth.accessToken} onChanged={async () => { await loadWorkspace(); }} />;
       case "catalog":
         return <CatalogPage workspace={workspace} onChanged={async () => { await loadWorkspace(); }} />;
       case "thresholds":

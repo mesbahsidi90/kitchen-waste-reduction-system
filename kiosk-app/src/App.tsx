@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { createWasteLog, getDeviceCatalog, type CatalogItem } from "./api";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { claimDevice, clearDeviceToken, createWasteLog, getApiErrorMessage, getDeviceCatalog, getDeviceToken, isDeviceUnauthorized, type CatalogItem } from "./api";
 import { connectToScale, isSerialSupported, type ScaleConnection } from "./serial-scale";
 import "./App.css";
 
-const SCALE_ID = import.meta.env.VITE_SCALE_ID ?? "SCALE_01";
+const DEFAULT_SCALE_ID = import.meta.env.VITE_SCALE_ID ?? "SCALE_01";
 const ENABLE_SIMULATOR = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCALE_SIMULATOR === "true";
 
 type Message = { kind: "idle" | "pending" | "success" | "error"; text: string };
@@ -18,6 +18,8 @@ const scaleLabels: Record<ScaleState, string> = {
 };
 
 export default function App() {
+  const [provisioned, setProvisioned] = useState(() => import.meta.env.DEV || Boolean(getDeviceToken()));
+  const [scaleId, setScaleId] = useState(DEFAULT_SCALE_ID);
   const [weight, setWeight] = useState(0);
   const [categories, setCategories] = useState<CatalogItem[]>([]);
   const [reasons, setReasons] = useState<CatalogItem[]>([]);
@@ -44,14 +46,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!provisioned) return;
     async function loadCatalog() {
       setCatalogLoading(true);
       try {
         const catalog = await getDeviceCatalog();
+        setScaleId(catalog.scale_id);
         setCategories(catalog.categories);
         setReasons(catalog.reasons);
         setMessage({ kind: "idle", text: "" });
-      } catch {
+      } catch (error) {
+        if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
+          clearDeviceToken();
+          setProvisioned(false);
+        }
         setMessage({ kind: "error", text: "تعذر تحميل أصناف الفرع. تحقق من إعداد الجهاز ثم أعد المحاولة." });
       } finally {
         setCatalogLoading(false);
@@ -59,7 +67,7 @@ export default function App() {
     }
 
     void loadCatalog();
-  }, []);
+  }, [provisioned]);
 
   async function handleScaleConnection() {
     if (connectionRef.current) {
@@ -114,7 +122,7 @@ export default function App() {
     try {
       await createWasteLog({
         client_event_id: pendingEventId.current,
-        scale_id: SCALE_ID,
+        scale_id: scaleId,
         weight_kg: weight,
         category,
         reason,
@@ -123,9 +131,18 @@ export default function App() {
       setCategory(null);
       setReason(null);
       setMessage({ kind: "success", text: "تم تسجيل الهدر بنجاح" });
-    } catch {
+    } catch (error) {
+      if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
+        clearDeviceToken();
+        setProvisioned(false);
+        return;
+      }
       setMessage({ kind: "error", text: "تعذر الاتصال بالخادم. اضغط تسجيل للمحاولة مجددًا." });
     }
+  }
+
+  if (!provisioned) {
+    return <PairingScreen onPaired={(deviceCode) => { setScaleId(deviceCode); setProvisioned(true); }} />;
   }
 
   return (
@@ -205,4 +222,40 @@ export default function App() {
       {message.text && <p className={`status-message ${message.kind}`} role="status" aria-live="polite">{message.text}</p>}
     </main>
   );
+}
+
+function PairingScreen({ onPaired }: { onPaired: (deviceCode: string) => void }) {
+  const [code, setCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function pair(event: FormEvent) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const claimed = await claimDevice(code);
+      onPaired(claimed.device_code);
+    } catch (caught) {
+      setError(getApiErrorMessage(caught, "تعذر تفعيل الجهاز. تحقق من الرمز والاتصال."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return <main className="pairing-shell" dir="rtl">
+    <section className="pairing-card">
+      <div className="pairing-mark">K</div>
+      <span className="pairing-kicker">Kitzon Kiosk</span>
+      <h1>تفعيل جهاز المطبخ</h1>
+      <p>اطلب رمز التفعيل من مدير المطبخ، ثم أدخله هنا لربط هذا الجهاز بالفرع.</p>
+      <form onSubmit={(event) => void pair(event)}>
+        <label htmlFor="pairing-code">رمز التفعيل</label>
+        <input id="pairing-code" dir="ltr" autoComplete="one-time-code" autoCapitalize="characters" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="ABCD-EFGH" maxLength={12} required />
+        <button type="submit" disabled={submitting || code.replace(/[\s-]/g, "").length !== 8}>{submitting ? "جاري التفعيل…" : "تفعيل الجهاز"}</button>
+      </form>
+      {error && <p className="pairing-error" role="alert">{error}</p>}
+      <small>الرمز صالح لمدة 15 دقيقة ويُستخدم مرة واحدة.</small>
+    </section>
+  </main>;
 }

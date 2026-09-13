@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "re
 import {
   createPlatformBranch,
   createPlatformOrganization,
+  createTenantDevice,
+  disableTenantDevice,
   getApiErrorMessage,
   getPlatformOrganization,
   invitePlatformMember,
@@ -130,16 +132,74 @@ export function BranchesPage({ workspace }: { workspace: WorkspaceData }) {
   );
 }
 
-export function DevicesPage({ workspace }: { workspace: WorkspaceData }) {
-  if (workspace.devices.length === 0) return <section className="panel"><EmptyState title="لا توجد أجهزة مسجلة" description="اربط أول ميزان بالفرع لتظهر حالة الاتصال هنا." /></section>;
+export function DevicesPage({ workspace, accessToken, onChanged }: {
+  workspace: WorkspaceData;
+  accessToken?: string;
+  onChanged: () => Promise<void>;
+}) {
+  const availableBranches = workspace.branches.filter((branch) => branch.status === "active");
+  const [branchId, setBranchId] = useState(workspace.assignedBranchId ?? availableBranches[0]?.id ?? "");
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(null);
   const branchNames = new Map(workspace.branches.map((branch) => [branch.id, branch.name]));
+
+  async function addDevice(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken) return;
+    setSaving(true);
+    setError("");
+    setPairing(null);
+    try {
+      const result = await createTenantDevice(accessToken, { branchId, name });
+      setName("");
+      setPairing({ code: result.pairing_code, expiresAt: result.expires_at });
+      await onChanged();
+    } catch (caught) {
+      setError(getApiErrorMessage(caught, "تعذر إنشاء الجهاز"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function disable(deviceId: string) {
+    if (!accessToken || !window.confirm("هل تريد تعطيل هذا الجهاز؟ سيتوقف عن إرسال البيانات فورًا.")) return;
+    setSaving(true);
+    setError("");
+    try {
+      await disableTenantDevice(accessToken, deviceId);
+      await onChanged();
+    } catch (caught) {
+      setError(getApiErrorMessage(caught, "تعذر تعطيل الجهاز"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <section className="card-grid">
-      {workspace.devices.map((device) => {
-        const online = device.status === "active" && isRecentlyOnline(device.last_seen_at);
-        return <article className="device-card" key={device.id}><div className="device-card-head"><div className="device-illustration">◉</div><StatusBadge active={online} activeText="متصل" inactiveText={device.status === "disabled" ? "معطّل" : "غير متصل"} /></div><h2>{device.name}</h2><code>{device.code}</code><dl><div><dt>الفرع</dt><dd>{branchNames.get(device.branch_id) ?? "—"}</dd></div><div><dt>آخر اتصال</dt><dd>{formatDate(device.last_seen_at)}</dd></div></dl></article>;
-      })}
-    </section>
+    <>
+      <section className="panel onboarding-panel">
+        <div className="panel-heading"><div><span className="section-kicker">تهيئة آمنة</span><h2>إضافة جهاز كيوسك</h2></div></div>
+        {availableBranches.length > 0 ? <form className="device-form" onSubmit={(event) => void addDevice(event)}>
+          <label>اسم الجهاز<input required minLength={2} maxLength={120} value={name} onChange={(event) => setName(event.target.value)} placeholder="مثال: كيوسك منطقة التحضير" /></label>
+          {workspace.role === "organization_owner" && <label>الفرع<select required value={branchId} onChange={(event) => setBranchId(event.target.value)}>{availableBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
+          <button className="primary-action" type="submit" disabled={saving || !name.trim() || !branchId || !accessToken}>{saving ? "جاري الإنشاء…" : "إنشاء رمز الاقتران"}</button>
+        </form> : <EmptyState title="لا يوجد فرع نشط" description="يجب تفعيل فرع قبل إضافة جهاز إليه." />}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {pairing && <div className="pairing-banner" role="status"><div><span>رمز التفعيل لمرة واحدة</span><strong dir="ltr">{pairing.code}</strong></div><p>أدخل هذا الرمز في تطبيق الكيوسك خلال 15 دقيقة. لن يظهر الرمز مرة أخرى بعد مغادرة الصفحة.</p></div>}
+      </section>
+
+      {workspace.devices.length === 0
+        ? <section className="panel"><EmptyState title="لا توجد أجهزة مسجلة" description="أنشئ جهازًا أعلاه ثم أدخل رمز التفعيل في الكيوسك." /></section>
+        : <section className="card-grid">
+          {workspace.devices.map((device) => {
+            const online = device.status === "active" && isRecentlyOnline(device.last_seen_at);
+            const inactiveText = device.status === "disabled" ? "معطّل" : device.status === "pending" ? "بانتظار التفعيل" : "غير متصل";
+            return <article className="device-card" key={device.id}><div className="device-card-head"><div className="device-illustration">◉</div><StatusBadge active={online} activeText="متصل" inactiveText={inactiveText} /></div><h2>{device.name}</h2><code>{device.code}</code><dl><div><dt>الفرع</dt><dd>{branchNames.get(device.branch_id) ?? "—"}</dd></div><div><dt>آخر اتصال</dt><dd>{formatDate(device.last_seen_at)}</dd></div></dl>{device.status !== "disabled" && <button type="button" className="secondary-action device-disable" disabled={saving} onClick={() => void disable(device.id)}>تعطيل الجهاز</button>}</article>;
+          })}
+        </section>}
+    </>
   );
 }
 

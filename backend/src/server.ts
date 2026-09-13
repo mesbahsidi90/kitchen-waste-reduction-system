@@ -7,6 +7,7 @@ import {
 import { config } from "./config.js";
 import { SupabaseWasteStore } from "./supabase-waste-store.js";
 import { SupabasePlatformAdminService, type PlatformAdminService } from "./platform-admin.js";
+import { SupabaseDeviceProvisioningService, type DeviceProvisioningService } from "./device-provisioning.js";
 import type { WasteStore } from "./waste-store.js";
 
 async function start() {
@@ -14,6 +15,7 @@ async function start() {
   let requireUser = allowLocalRequests;
   let requireDevice = allowLocalRequests;
   let platformAdminService: PlatformAdminService | undefined;
+  let deviceProvisioningService: DeviceProvisioningService | undefined;
 
   if (config.dataProvider === "supabase") {
     const supabaseStore = new SupabaseWasteStore(config.supabase!);
@@ -24,6 +26,10 @@ async function start() {
       url: config.supabase!.url,
       secretKey: config.supabase!.secretKey,
       inviteRedirectUrl: config.authInviteRedirectUrl,
+    });
+    deviceProvisioningService = new SupabaseDeviceProvisioningService({
+      url: config.supabase!.url,
+      secretKey: config.supabase!.secretKey,
     });
   } else {
     const [{ createDatabase }, { SqliteWasteStore }] = await Promise.all([
@@ -39,6 +45,7 @@ async function start() {
     requireUser,
     requireDevice,
     platformAdminService,
+    deviceProvisioningService,
   });
   const server = app.listen(config.port, "0.0.0.0", () => {
     console.log(`Kitzon API listening on port ${config.port}`);

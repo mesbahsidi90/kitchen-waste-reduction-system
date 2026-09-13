@@ -42,7 +42,7 @@ npm run supabase:test
 npm run supabase:bootstrap -- --user-id <auth-user-uuid> --organization-name "مطعمي" --organization-slug my-restaurant --branch-name "الفرع الرئيسي" --device-code SCALE_01
 ```
 
-يعرض السكربت رمز الجهاز مرة واحدة. ضعه في `kiosk-app/.env` باسم `VITE_DEVICE_TOKEN`. المفتاح السري `SUPABASE_SECRET_KEY` خاص بالخادم فقط، ويُمنع وضعه في تطبيقات React أو في Git.
+يعرض السكربت رمز جهاز للاختبارات القديمة. في التشغيل المعتاد ينشئ مالك المؤسسة أو مدير الفرع جهازًا من صفحة «الأجهزة والموازين»، ثم يُدخل رمز الاقتران المؤقت في الكيوسك عند أول تشغيل. لا تضع رمز جهاز في متغير `VITE_DEVICE_TOKEN` عند نشر التطبيق للعامة. المفتاح `SUPABASE_SECRET_KEY` خاص بالخادم فقط، ويُمنع وضعه في تطبيقات React أو في Git.
 
 للربط بمشروع Supabase مستضاف، استخدم `npx supabase login` ثم `npx supabase link --project-ref <project-ref>` وطبّق migrations عبر `npx supabase db push`.
 
@@ -82,6 +82,9 @@ npm run supabase:lint
 - `POST /api/v1/waste-logs`
 - `GET /api/v1/waste-logs?limit=50&offset=0`
 - `GET /api/v1/analytics/summary`
+- `POST /api/v1/devices` (مالك المؤسسة أو مدير الفرع)
+- `POST /api/v1/devices/claim` (اقتران الكيوسك لمرة واحدة)
+- `PATCH /api/v1/devices/:deviceId/disable` (مالك المؤسسة أو مدير الفرع)
 
 عند `DATA_PROVIDER=supabase` تتطلب عمليات القراءة Bearer token صالحاً من Supabase Auth، وتتطلب عمليات التسجيل من الكشك رمز جهاز مستقل بصيغة `Device <token>`. تطبّق قاعدة البيانات عزل المطاعم والفروع بواسطة RLS، ولا يُرسل المفتاح السري إلى المتصفح.
 
