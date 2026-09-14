@@ -1,5 +1,5 @@
 begin;
-select plan(14);
+select plan(19);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-000000000001', 'owner-one@example.test'),
@@ -45,7 +45,15 @@ select is(
 select ok(not has_table_privilege('anon', 'public.organizations', 'select'), 'anonymous users cannot read organizations');
 select ok(has_table_privilege('authenticated', 'public.waste_events', 'select'), 'authenticated users have explicit read grants');
 select ok(has_table_privilege('authenticated', 'public.categories', 'insert'), 'authenticated managers have an explicit category insert grant');
+select ok(has_table_privilege('authenticated', 'public.waste_reasons', 'insert'), 'authenticated managers have an explicit waste reason insert grant');
 select ok(not has_column_privilege('authenticated', 'public.devices', 'api_key_hash', 'select'), 'device hashes are not readable by clients');
+select is(
+  (select count(*) from public.waste_reasons where name in (
+    'فائض الإنتاج', 'خطأ في التحضير', 'انتهاء الصلاحية', 'تلف أثناء التخزين', 'بقايا العملاء'
+  )),
+  10::bigint,
+  'every new branch receives five default waste reasons'
+);
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
@@ -92,6 +100,25 @@ select throws_ok(
   '42501',
   'new row violates row-level security policy for table "categories"',
   'a branch manager cannot add a category to another tenant'
+);
+select lives_ok(
+  $$insert into public.waste_reasons (id, organization_id, branch_id, name)
+    values ('33333300-0000-4000-8000-000000000003', '11000000-0000-4000-8000-000000000001',
+      '11100000-0000-4000-8000-000000000001', 'Cancelled order')$$,
+  'a branch manager can add a waste reason to the assigned branch'
+);
+select lives_ok(
+  $$update public.waste_reasons set is_active = false
+    where id = '33333300-0000-4000-8000-000000000003'$$,
+  'a branch manager can deactivate a waste reason in the assigned branch'
+);
+select throws_ok(
+  $$insert into public.waste_reasons (organization_id, branch_id, name)
+    values ('22000000-0000-4000-8000-000000000002',
+      '22200000-0000-4000-8000-000000000002', 'Forbidden reason')$$,
+  '42501',
+  'new row violates row-level security policy for table "waste_reasons"',
+  'a branch manager cannot add a waste reason to another tenant'
 );
 
 select * from finish();

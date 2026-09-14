@@ -148,7 +148,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
 }
 
 function requireSupabaseClient() {
-  if (!supabase) throw new Error("إدارة الأصناف متاحة بعد تسجيل الدخول فقط");
+  if (!supabase) throw new Error("إدارة القوائم متاحة بعد تسجيل الدخول فقط");
   return supabase;
 }
 
@@ -182,4 +182,35 @@ export async function setCategoryActive(workspace: WorkspaceData, categoryId: st
     .eq("id", category.id)
     .eq("organization_id", workspace.organization.id);
   if (error) throw new Error("تعذر تحديث حالة الصنف");
+}
+
+export async function createWasteReason(
+  workspace: WorkspaceData,
+  input: { branchId: string; name: string },
+) {
+  const branch = workspace.branches.find((item) => item.id === input.branchId && item.status === "active");
+  if (!branch) throw new Error("اختر فرعًا نشطًا");
+
+  const name = input.name.trim();
+  if (!name || name.length > 100) throw new Error("اسم السبب يجب أن يكون بين 1 و100 حرف");
+
+  const { error } = await requireSupabaseClient().from("waste_reasons").insert({
+    organization_id: workspace.organization.id,
+    branch_id: branch.id,
+    name,
+  });
+  if (error?.code === "23505") throw new Error("هذا السبب موجود بالفعل في الفرع");
+  if (error) throw new Error("تعذر إضافة سبب الهدر");
+}
+
+export async function setWasteReasonActive(workspace: WorkspaceData, reasonId: string, isActive: boolean) {
+  const reason = workspace.reasons.find((item) => item.id === reasonId);
+  if (!reason) throw new Error("سبب الهدر غير موجود");
+
+  const { error } = await requireSupabaseClient()
+    .from("waste_reasons")
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", reason.id)
+    .eq("organization_id", workspace.organization.id);
+  if (error) throw new Error("تعذر تحديث حالة سبب الهدر");
 }

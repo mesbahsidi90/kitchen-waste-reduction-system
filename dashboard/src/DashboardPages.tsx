@@ -17,7 +17,13 @@ import {
   type PlatformOverview,
   type WasteLog,
 } from "./api";
-import { createCategory, setCategoryActive, type WorkspaceData } from "./workspace";
+import {
+  createCategory,
+  createWasteReason,
+  setCategoryActive,
+  setWasteReasonActive,
+  type WorkspaceData,
+} from "./workspace";
 
 const WasteChart = lazy(() => import("./WasteChart"));
 
@@ -211,6 +217,11 @@ export function CatalogPage({ workspace, onChanged }: { workspace: WorkspaceData
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [reasonBranchId, setReasonBranchId] = useState(workspace.assignedBranchId ?? availableBranches[0]?.id ?? "");
+  const [reasonName, setReasonName] = useState("");
+  const [reasonSaving, setReasonSaving] = useState(false);
+  const [reasonError, setReasonError] = useState("");
+  const [reasonSuccess, setReasonSuccess] = useState("");
   const branchNames = new Map(workspace.branches.map((branch) => [branch.id, branch.name]));
 
   async function add(event: FormEvent) {
@@ -245,6 +256,38 @@ export function CatalogPage({ workspace, onChanged }: { workspace: WorkspaceData
     }
   }
 
+  async function addReason(event: FormEvent) {
+    event.preventDefault();
+    setReasonSaving(true);
+    setReasonError("");
+    setReasonSuccess("");
+    try {
+      await createWasteReason(workspace, { branchId: reasonBranchId, name: reasonName });
+      setReasonName("");
+      setReasonSuccess("تمت إضافة سبب الهدر وسيظهر على جهاز الفرع.");
+      await onChanged();
+    } catch (caught) {
+      setReasonError(caught instanceof Error ? caught.message : "تعذر إضافة سبب الهدر");
+    } finally {
+      setReasonSaving(false);
+    }
+  }
+
+  async function toggleReason(reasonId: string, active: boolean) {
+    setReasonSaving(true);
+    setReasonError("");
+    setReasonSuccess("");
+    try {
+      await setWasteReasonActive(workspace, reasonId, active);
+      setReasonSuccess(active ? "تم تفعيل سبب الهدر." : "تم إيقاف السبب ولن يظهر على الكيوسك.");
+      await onChanged();
+    } catch (caught) {
+      setReasonError(caught instanceof Error ? caught.message : "تعذر تحديث سبب الهدر");
+    } finally {
+      setReasonSaving(false);
+    }
+  }
+
   return <section className="catalog-grid">
     <article className="panel">
       <div className="panel-heading"><div><span className="section-kicker">يديرها مدير المطبخ</span><h2>أصناف الطعام</h2></div><span className="count-chip">{workspace.categories.length.toLocaleString("ar-EG")}</span></div>
@@ -260,8 +303,15 @@ export function CatalogPage({ workspace, onChanged }: { workspace: WorkspaceData
     </article>
 
     <article className="panel">
-      <div className="panel-heading"><div><span className="section-kicker">قائمة ثابتة حاليًا</span><h2>أسباب الهدر</h2></div><span className="count-chip">{workspace.reasons.length.toLocaleString("ar-EG")}</span></div>
-      {workspace.reasons.length === 0 ? <EmptyState title="لا توجد أسباب هدر" description="يجب تهيئة أسباب الهدر لهذا الفرع." /> : <ul className="catalog-list">{workspace.reasons.map((item) => <li key={item.id}><span className="catalog-name"><span>{item.name}<small>{branchNames.get(item.branch_id) ?? "—"}</small></span></span><StatusBadge active={item.is_active} /></li>)}</ul>}
+      <div className="panel-heading"><div><span className="section-kicker">يديرها مدير المطبخ</span><h2>أسباب الهدر</h2></div><span className="count-chip">{workspace.reasons.length.toLocaleString("ar-EG")}</span></div>
+      {availableBranches.length > 0 && <form className="catalog-form reason-form" onSubmit={(event) => void addReason(event)}>
+        <label>اسم السبب<input value={reasonName} onChange={(event) => setReasonName(event.target.value)} maxLength={100} required placeholder="مثال: إلغاء طلب" /></label>
+        {workspace.role === "organization_owner" && <label>الفرع<select value={reasonBranchId} onChange={(event) => setReasonBranchId(event.target.value)} required>{availableBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
+        <button className="primary-action" type="submit" disabled={reasonSaving || !reasonName.trim() || !reasonBranchId}>{reasonSaving ? "جاري الحفظ…" : "إضافة السبب"}</button>
+      </form>}
+      {reasonError && <p className="form-error">{reasonError}</p>}
+      {reasonSuccess && <p className="success-banner">{reasonSuccess}</p>}
+      {workspace.reasons.length === 0 ? <EmptyState title="لا توجد أسباب هدر" description="أضف أول سبب ليظهر في تطبيق الكيوسك." /> : <ul className="catalog-list">{workspace.reasons.map((item) => <li key={item.id}><span className="catalog-name"><span>{item.name}<small>{branchNames.get(item.branch_id) ?? "—"}</small></span></span><div className="catalog-actions"><StatusBadge active={item.is_active} /><button type="button" className="secondary-action compact-action" disabled={reasonSaving} onClick={() => void toggleReason(item.id, !item.is_active)}>{item.is_active ? "إيقاف" : "تفعيل"}</button></div></li>)}</ul>}
     </article>
   </section>;
 }
