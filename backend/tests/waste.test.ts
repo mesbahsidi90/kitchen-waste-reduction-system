@@ -9,6 +9,7 @@ import { createApp } from "../src/app.js";
 import { allowLocalRequests } from "../src/auth.js";
 import { createDatabase, type AppDatabase } from "../src/database.js";
 import { SqliteWasteStore } from "../src/sqlite-waste-store.js";
+import { SqliteDemoRequestService } from "../src/demo-requests.js";
 
 describe("waste API", () => {
   let database: AppDatabase;
@@ -20,6 +21,7 @@ describe("waste API", () => {
       corsOrigins: ["http://localhost:5173"],
       requireUser: allowLocalRequests,
       requireDevice: allowLocalRequests,
+      demoRequestService: new SqliteDemoRequestService(database),
     });
   });
 
@@ -114,6 +116,27 @@ describe("waste API", () => {
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe("NOT_FOUND");
   });
+
+  it("accepts a validated public demo request", async () => {
+    const response = await request(app).post("/api/v1/demo-requests").send({
+      restaurantName: "Restaurant El Bahja",
+      contactName: "Amine Benali",
+      phone: "+213 555 00 00 00",
+      email: "amine@example.com",
+      city: "Alger",
+      branchCount: 2,
+      preferredLanguage: "fr",
+      website: "",
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ status: "received" });
+    const row = await database.get<{ restaurant_name: string; branch_count: number }>(
+      "select restaurant_name, branch_count from demo_requests where id = ?",
+      response.body.id,
+    );
+    expect(row).toEqual({ restaurant_name: "Restaurant El Bahja", branch_count: 2 });
+  });
 });
 
 describe("database migrations", () => {
@@ -152,7 +175,7 @@ describe("database migrations", () => {
         client_event_id: "legacy-1",
         created_at: "2026-09-12T08:00:00Z",
       });
-      expect(versions.map((migration) => migration.version)).toEqual([1, 2]);
+      expect(versions.map((migration) => migration.version)).toEqual([1, 2, 3]);
       await migratedDatabase.close();
     } finally {
       await fs.rm(temporaryDirectory, { recursive: true, force: true });

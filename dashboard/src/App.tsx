@@ -19,6 +19,7 @@ import {
   WasteTable,
 } from "./DashboardPages";
 import { getWorkspaceData, platformWorkspace, type WorkspaceData, type WorkspaceRole } from "./workspace";
+import { LanguageSwitcher, useI18n } from "./i18n";
 import "./App.css";
 
 const emptySummary: AnalyticsSummary = { total_weight_kg: 0, total_count: 0, categories: [] };
@@ -64,6 +65,7 @@ const roleLabels: Record<WorkspaceRole, string> = {
 };
 
 function Dashboard({ auth }: { auth: DashboardAuth }) {
+  const { language } = useI18n();
   const [activePage, setActivePage] = useState<PageKey>("overview");
   const [menuOpen, setMenuOpen] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
@@ -181,7 +183,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
   }
 
   return (
-    <main className="app-shell" dir="rtl">
+    <main className="app-shell" dir={language === "ar" ? "rtl" : "ltr"}>
       <button className={`sidebar-overlay ${menuOpen ? "visible" : ""}`} aria-label="إغلاق القائمة" onClick={() => setMenuOpen(false)} />
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
         <div className="brand"><span className="brand-mark">K</span><div><strong>Kitzon</strong><small>منصة إدارة الهدر</small></div></div>
@@ -197,6 +199,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
         <header className="topbar">
           <div className="title-group"><button type="button" className="menu-button" aria-label="فتح القائمة" onClick={() => setMenuOpen(true)}>☰</button><div><h1>{page.title}</h1><p>{page.description}</p></div></div>
           <div className="topbar-actions">
+            <LanguageSwitcher compact />
             <span className="scope-chip"><i />{workspace?.role === "platform_super_admin" ? "كل المؤسسات" : workspace?.role === "organization_owner" ? "كل الفروع" : assignedBranch?.name ?? "نطاق الفرع"}</span>
             <button type="button" className="refresh-button" disabled={analyticsLoading} onClick={() => void refreshAll()}><span>↻</span>{analyticsLoading ? "جارٍ التحديث" : "تحديث"}</button>
             <div className="account-block"><span className="avatar">{(auth.email?.[0] ?? "م").toUpperCase()}</span><div><strong>{auth.email?.split("@")[0] ?? "حساب تجريبي"}</strong><small>{workspace ? roleLabels[workspace.role] : "مستخدم"}</small></div>{auth.signOut && <button type="button" onClick={() => void auth.signOut?.()} aria-label="تسجيل الخروج">←</button>}</div>

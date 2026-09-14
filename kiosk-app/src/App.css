@@ -11,7 +11,7 @@
 .pairing-kicker { color: #58e0c0; font-size: 14px; font-weight: 800; }
 .pairing-card h1 { margin: 10px 0 8px; font-size: 28px; }
 .pairing-card > p { margin: 0 auto 25px; color: #9ba9bc; line-height: 1.8; }
-.pairing-card form { display: grid; gap: 10px; text-align: right; }
+.pairing-card form { display: grid; gap: 10px; text-align: start; }
 .pairing-card label { color: #b8c4d4; font-size: 14px; font-weight: 750; }
 .pairing-card input { width: 100%; padding: 16px; box-sizing: border-box; border: 2px solid #3b506c; border-radius: 12px; color: #fff; background: #0b1422; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 26px; font-weight: 800; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
 .pairing-card button { min-height: 58px; border: 0; border-radius: 12px; color: #06241c; background: #58e0c0; font-size: 18px; font-weight: 850; }
@@ -31,8 +31,10 @@
 .app-header strong { color: #58e0c0; font-size: 28px; }
 .app-header span { color: #a9b6c9; }
 .status-strip { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.language-switcher { padding: 8px 12px; border: 1px solid #314056; border-radius: 999px; color: #e7eef8; background: #111d30; cursor: pointer; }
+.pairing-language { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .status-strip span { padding: 8px 12px; border: 1px solid #314056; border-radius: 999px; font-size: 14px; }
-.status-strip span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: currentColor; }
+.status-strip span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-inline-end: 7px; border-radius: 50%; background: currentColor; }
 .status-strip .online { color: #58e0c0; }
 .status-strip .offline { color: #f6b95d; }
 .status-strip .queued { color: #7dd3fc; }
@@ -56,7 +58,7 @@
 .weight-value small { color: #fff; font-size: 24px; }
 .scale-button, .simulate-button { min-height: 52px; padding: 10px 20px; color: #fff; border: 1px solid #49627f; border-radius: 10px; font-weight: 700; }
 .scale-button { background: #21334b; }
-.simulate-button { margin-right: 10px; background: transparent; color: #a9b6c9; }
+.simulate-button { margin-inline-start: 10px; background: transparent; color: #a9b6c9; }
 .scale-button:disabled { opacity: .55; }
 
 h2 { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; font-size: 20px; }

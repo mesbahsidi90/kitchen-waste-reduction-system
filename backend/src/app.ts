@@ -6,6 +6,7 @@ import { createWasteRouter } from "./waste.js";
 import { createPlatformAdminRouter, type PlatformAdminService } from "./platform-admin.js";
 import { createDeviceProvisioningRouter, type DeviceProvisioningService } from "./device-provisioning.js";
 import { ApplicationError, type WasteStore } from "./waste-store.js";
+import { createDemoRequestsRouter, type DemoRequestService } from "./demo-requests.js";
 
 type AppOptions = {
   corsOrigins: string[];
@@ -13,6 +14,7 @@ type AppOptions = {
   requireDevice: RequestHandler;
   platformAdminService?: PlatformAdminService;
   deviceProvisioningService?: DeviceProvisioningService;
+  demoRequestService?: DemoRequestService;
 };
 
 export function createApp(store: WasteStore, options: AppOptions) {
@@ -45,6 +47,9 @@ export function createApp(store: WasteStore, options: AppOptions) {
   });
 
   app.use("/api/v1", createWasteRouter(store, options));
+  if (options.demoRequestService) {
+    app.use("/api/v1/demo-requests", createDemoRequestsRouter(options.demoRequestService));
+  }
   if (options.deviceProvisioningService) {
     app.use("/api/v1/devices", createDeviceProvisioningRouter(options.deviceProvisioningService, options.requireUser));
   }

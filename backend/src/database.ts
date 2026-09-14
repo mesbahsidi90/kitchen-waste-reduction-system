@@ -87,6 +87,37 @@ async function migrate(db: AppDatabase) {
       throw error;
     }
   }
+
+  const demoRequestsMigration = await db.get<{ version: number }>(
+    "SELECT version FROM schema_migrations WHERE version = 3",
+  );
+  if (!demoRequestsMigration) {
+    await db.exec("BEGIN IMMEDIATE");
+    try {
+      await db.exec(`
+        CREATE TABLE demo_requests (
+          id TEXT PRIMARY KEY,
+          restaurant_name TEXT NOT NULL,
+          contact_name TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          email TEXT,
+          city TEXT NOT NULL,
+          branch_count INTEGER NOT NULL DEFAULT 1,
+          preferred_language TEXT NOT NULL DEFAULT 'ar',
+          message TEXT,
+          status TEXT NOT NULL DEFAULT 'new',
+          created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+        CREATE INDEX idx_demo_requests_status_created_at
+          ON demo_requests(status, created_at DESC);
+      `);
+      await db.run("INSERT INTO schema_migrations (version) VALUES (3)");
+      await db.exec("COMMIT");
+    } catch (error) {
+      await db.exec("ROLLBACK");
+      throw error;
+    }
+  }
 }
 
 export async function createDatabase(filename: string): Promise<AppDatabase> {

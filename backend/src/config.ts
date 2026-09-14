@@ -22,7 +22,7 @@ const environmentSchema = z.object({
     .default("http://localhost:5173/accept-invite"),
   CORS_ORIGINS: z
     .string()
-    .default("http://localhost:5173,http://localhost:5174"),
+    .default("http://localhost:5173,http://localhost:5174,http://localhost:5175"),
 });
 
 const environment = environmentSchema.parse(process.env);

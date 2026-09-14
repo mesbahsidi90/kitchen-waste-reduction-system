@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Form
 import { claimDevice, clearDeviceToken, createWasteLog, getApiErrorMessage, getDeviceCatalog, getDeviceToken, isDeviceUnauthorized, isRetryableWasteLogError, type CatalogItem, type WasteLogInput } from "./api";
 import { cacheDeviceCatalog, clearCachedDeviceCatalog, getCachedDeviceCatalog, getPendingWasteLogs, queueWasteLog, removePendingWasteLog } from "./offline-queue";
 import { connectToScale, isSerialSupported, type ScaleConnection } from "./serial-scale";
+import { LanguageSwitcher, useI18n } from "./i18n";
 import "./App.css";
 
 const DEFAULT_SCALE_ID = import.meta.env.VITE_SCALE_ID ?? "SCALE_01";
@@ -10,15 +11,12 @@ const ENABLE_SIMULATOR = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCAL
 type Message = { kind: "idle" | "pending" | "success" | "error"; text: string };
 type ScaleState = "disconnected" | "connecting" | "connected" | "unsupported" | "error";
 
-const scaleLabels: Record<ScaleState, string> = {
-  disconnected: "الميزان غير متصل",
-  connecting: "جاري الاتصال…",
-  connected: "الميزان متصل",
-  unsupported: "الاتصال غير مدعوم",
-  error: "تعذر اتصال الميزان",
-};
-
 export default function App() {
+  const { t, locale, dir } = useI18n();
+  const scaleLabels: Record<ScaleState, string> = {
+    disconnected: t("scaleDisconnected"), connecting: t("scaleConnecting"), connected: t("scaleConnected"),
+    unsupported: t("scaleUnsupported"), error: t("scaleError"),
+  };
   const [initialCatalog] = useState(() => getCachedDeviceCatalog());
   const [provisioned, setProvisioned] = useState(() => import.meta.env.DEV || Boolean(getDeviceToken()));
   const [scaleId, setScaleId] = useState(initialCatalog?.scale_id ?? DEFAULT_SCALE_ID);
@@ -45,7 +43,7 @@ export default function App() {
 
     syncingRef.current = true;
     setSyncing(true);
-    setMessage({ kind: "pending", text: `جاري مزامنة ${pendingEvents.length.toLocaleString("ar-EG")} عمليات…` });
+    setMessage({ kind: "pending", text: `${t("syncingEvents")} (${pendingEvents.length.toLocaleString(locale)})` });
     let synced = 0;
     try {
       for (const event of pendingEvents) {
@@ -61,10 +59,10 @@ export default function App() {
             setProvisioned(false);
             stopSync = true;
           } else if (isRetryableWasteLogError(error)) {
-            setMessage({ kind: "error", text: "تعذرت المزامنة مؤقتًا. سيحاول الكيوسك مجددًا عند عودة الاتصال." });
+            setMessage({ kind: "error", text: t("syncTemporaryError") });
             stopSync = true;
           } else {
-            setMessage({ kind: "error", text: "توجد عملية معلّقة تحتاج مراجعة إعدادات الفرع." });
+            setMessage({ kind: "error", text: t("pendingReview") });
           }
           if (stopSync) break;
         }
@@ -72,13 +70,13 @@ export default function App() {
       const remaining = getPendingWasteLogs().length;
       setPendingCount(remaining);
       if (remaining === 0 && synced > 0) {
-        setMessage({ kind: "success", text: "تمت مزامنة جميع العمليات المعلّقة." });
+        setMessage({ kind: "success", text: t("syncComplete") });
       }
     } finally {
       syncingRef.current = false;
       setSyncing(false);
     }
-  }, [provisioned]);
+  }, [locale, provisioned, t]);
 
   useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine);
@@ -128,9 +126,9 @@ export default function App() {
             setScaleId(cachedCatalog.scale_id);
             setCategories(cachedCatalog.categories);
             setReasons(cachedCatalog.reasons);
-            setMessage({ kind: "success", text: "تعذر تحديث القائمة؛ يستخدم الكيوسك آخر نسخة محفوظة." });
+            setMessage({ kind: "success", text: t("cachedCatalog") });
           } else {
-            setMessage({ kind: "error", text: "تعذر تحميل أصناف الفرع. تحقق من إعداد الجهاز ثم أعد المحاولة." });
+            setMessage({ kind: "error", text: t("catalogError") });
           }
         }
       } finally {
@@ -139,7 +137,7 @@ export default function App() {
     }
 
     void loadCatalog();
-  }, [provisioned]);
+  }, [provisioned, t]);
 
   async function handleScaleConnection() {
     if (connectionRef.current) {
@@ -170,17 +168,17 @@ export default function App() {
         return;
       }
       setScaleState("error");
-      setMessage({ kind: "error", text: "تعذر الاتصال بالميزان. تحقق من الكابل ثم حاول مجددًا." });
+      setMessage({ kind: "error", text: t("scaleConnectionError") });
     }
   }
 
   async function handleSend() {
     if (weight <= 0) {
-      setMessage({ kind: "error", text: "ضع الهدر على الميزان أولًا." });
+      setMessage({ kind: "error", text: t("putWasteFirst") });
       return;
     }
     if (!category || !reason) {
-      setMessage({ kind: "error", text: "اختر الصنف والسبب قبل التسجيل." });
+      setMessage({ kind: "error", text: t("chooseBoth") });
       return;
     }
     pendingEventId.current ??= crypto.randomUUID();
@@ -198,21 +196,21 @@ export default function App() {
         pendingEventId.current = null;
         setCategory(null);
         setReason(null);
-        setMessage({ kind: "success", text: "تم حفظ العملية على الجهاز وستُرسل عند عودة الاتصال." });
+        setMessage({ kind: "success", text: t("queuedOffline") });
       } catch (error) {
-        setMessage({ kind: "error", text: error instanceof Error ? error.message : "تعذر حفظ العملية على الجهاز." });
+        setMessage({ kind: "error", text: error instanceof Error ? error.message : t("localSaveError") });
       }
       return;
     }
 
-    setMessage({ kind: "pending", text: "جاري التسجيل…" });
+    setMessage({ kind: "pending", text: t("recording") });
 
     try {
       await createWasteLog(event);
       pendingEventId.current = null;
       setCategory(null);
       setReason(null);
-      setMessage({ kind: "success", text: "تم تسجيل الهدر بنجاح" });
+      setMessage({ kind: "success", text: t("recorded") });
     } catch (error) {
       if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
         clearDeviceToken();
@@ -226,12 +224,12 @@ export default function App() {
           pendingEventId.current = null;
           setCategory(null);
           setReason(null);
-          setMessage({ kind: "success", text: "تعذر الوصول للخادم؛ حُفظت العملية وستُزامن تلقائيًا." });
+          setMessage({ kind: "success", text: t("queuedServerError") });
         } catch (queueError) {
-          setMessage({ kind: "error", text: queueError instanceof Error ? queueError.message : "تعذر حفظ العملية." });
+          setMessage({ kind: "error", text: queueError instanceof Error ? queueError.message : t("localSaveError") });
         }
       } else {
-        setMessage({ kind: "error", text: getApiErrorMessage(error, "تعذر تسجيل العملية. راجع إعدادات الفرع.") });
+        setMessage({ kind: "error", text: getApiErrorMessage(error, t("recordError")) });
       }
     }
   }
@@ -241,41 +239,42 @@ export default function App() {
   }
 
   return (
-    <main className="kiosk-shell" dir="rtl">
+    <main className="kiosk-shell" dir={dir}>
       <header className="app-header">
         <div>
           <strong>Kitzon</strong>
-          <span>تسجيل الهدر</span>
+          <span>{t("wasteRecording")}</span>
         </div>
-        <div className="status-strip" aria-label="حالة النظام">
-          <span className={isOnline ? "online" : "offline"}>{isOnline ? "متصل" : "دون إنترنت"}</span>
+        <div className="status-strip" aria-label={t("systemStatus")}>
+          <LanguageSwitcher />
+          <span className={isOnline ? "online" : "offline"}>{isOnline ? t("online") : t("offline")}</span>
           <span className={scaleState === "connected" ? "online" : "offline"}>{scaleLabels[scaleState]}</span>
-          {pendingCount > 0 && <span className="queued">{pendingCount.toLocaleString("ar-EG")} معلّقة</span>}
+          {pendingCount > 0 && <span className="queued">{pendingCount.toLocaleString(locale)} {locale.startsWith("fr") ? "en attente" : locale.startsWith("en") ? "pending" : "معلّقة"}</span>}
         </div>
       </header>
 
-      {pendingCount > 0 && <aside className="sync-banner"><div><strong>عمليات محفوظة على الجهاز</strong><p>ستُرسل تلقائيًا عند توفر الاتصال.</p></div><button type="button" disabled={!isOnline || syncing} onClick={() => void syncPendingEvents()}>{syncing ? "جاري الإرسال…" : "مزامنة الآن"}</button></aside>}
+      {pendingCount > 0 && <aside className="sync-banner"><div><strong>{t("savedEvents")}</strong><p>{t("autoSend")}</p></div><button type="button" disabled={!isOnline || syncing} onClick={() => void syncPendingEvents()}>{syncing ? t("syncing") : t("syncNow")}</button></aside>}
 
       <section className="weight-panel" aria-labelledby="weight-title">
-        <p id="weight-title">الوزن</p>
-        <output className="weight-value">{weight.toFixed(3)} <small>كجم</small></output>
+        <p id="weight-title">{t("weight")}</p>
+        <output className="weight-value">{weight.toFixed(3)} <small>{t("kg")}</small></output>
         <button
           className="scale-button"
           type="button"
           disabled={scaleState === "connecting" || scaleState === "unsupported"}
           onClick={() => void handleScaleConnection()}
         >
-          {scaleState === "connected" ? "فصل الميزان" : "توصيل الميزان"}
+          {scaleState === "connected" ? t("disconnectScale") : t("connectScale")}
         </button>
         {ENABLE_SIMULATOR && scaleState !== "connected" && (
           <button className="simulate-button" type="button" onClick={() => setWeight(Number((Math.random() * 3 + 0.2).toFixed(3)))}>
-            تجربة وزن عشوائي
+            {t("simulate")}
           </button>
         )}
       </section>
 
       <section aria-labelledby="category-title">
-        <h2 id="category-title"><span>1</span> اختر الصنف</h2>
+        <h2 id="category-title"><span>1</span> {t("chooseCategory")}</h2>
         <div className="option-grid category-grid">
           {categories.map((item) => (
             <button
@@ -289,13 +288,13 @@ export default function App() {
               {item.name}
             </button>
           ))}
-          {!catalogLoading && categories.length === 0 && <p className="empty-options">لا توجد أصناف مفعّلة لهذا الفرع.</p>}
-          {catalogLoading && <p className="empty-options">جاري تحميل الأصناف…</p>}
+          {!catalogLoading && categories.length === 0 && <p className="empty-options">{t("noCategories")}</p>}
+          {catalogLoading && <p className="empty-options">{t("loadingCategories")}</p>}
         </div>
       </section>
 
       <section aria-labelledby="reason-title">
-        <h2 id="reason-title"><span>2</span> اختر السبب</h2>
+        <h2 id="reason-title"><span>2</span> {t("chooseReason")}</h2>
         <div className="option-grid">
           {reasons.map((item) => (
             <button
@@ -308,13 +307,13 @@ export default function App() {
               {item.name}
             </button>
           ))}
-          {!catalogLoading && reasons.length === 0 && <p className="empty-options">لا توجد أسباب هدر مفعّلة لهذا الفرع.</p>}
-          {catalogLoading && <p className="empty-options">جاري تحميل الأسباب…</p>}
+          {!catalogLoading && reasons.length === 0 && <p className="empty-options">{t("noReasons")}</p>}
+          {catalogLoading && <p className="empty-options">{t("loadingReasons")}</p>}
         </div>
       </section>
 
       <button className="submit-button" type="button" disabled={isSubmitting || syncing} onClick={() => void handleSend()}>
-        {isSubmitting ? "جاري التسجيل…" : `تسجيل ${weight.toFixed(3)} كجم`}
+        {isSubmitting ? t("recording") : `${t("record")} ${weight.toFixed(3)} ${t("kg")}`}
       </button>
 
       {message.text && <p className={`status-message ${message.kind}`} role="status" aria-live="polite">{message.text}</p>}
@@ -323,6 +322,7 @@ export default function App() {
 }
 
 function PairingScreen({ onPaired }: { onPaired: (deviceCode: string) => void }) {
+  const { t, dir } = useI18n();
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -335,25 +335,26 @@ function PairingScreen({ onPaired }: { onPaired: (deviceCode: string) => void })
       const claimed = await claimDevice(code);
       onPaired(claimed.device_code);
     } catch (caught) {
-      setError(getApiErrorMessage(caught, "تعذر تفعيل الجهاز. تحقق من الرمز والاتصال."));
+      setError(getApiErrorMessage(caught, t("pairingError")));
     } finally {
       setSubmitting(false);
     }
   }
 
-  return <main className="pairing-shell" dir="rtl">
+  return <main className="pairing-shell" dir={dir}>
     <section className="pairing-card">
+      <div className="pairing-language"><LanguageSwitcher /></div>
       <div className="pairing-mark">K</div>
       <span className="pairing-kicker">Kitzon Kiosk</span>
-      <h1>تفعيل جهاز المطبخ</h1>
-      <p>اطلب رمز التفعيل من مدير المطبخ، ثم أدخله هنا لربط هذا الجهاز بالفرع.</p>
+      <h1>{t("activateKitchen")}</h1>
+      <p>{t("pairingHelp")}</p>
       <form onSubmit={(event) => void pair(event)}>
-        <label htmlFor="pairing-code">رمز التفعيل</label>
+        <label htmlFor="pairing-code">{t("activationCode")}</label>
         <input id="pairing-code" dir="ltr" autoComplete="one-time-code" autoCapitalize="characters" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="ABCD-EFGH" maxLength={12} required />
-        <button type="submit" disabled={submitting || code.replace(/[\s-]/g, "").length !== 8}>{submitting ? "جاري التفعيل…" : "تفعيل الجهاز"}</button>
+        <button type="submit" disabled={submitting || code.replace(/[\s-]/g, "").length !== 8}>{submitting ? t("activating") : t("activate")}</button>
       </form>
       {error && <p className="pairing-error" role="alert">{error}</p>}
-      <small>الرمز صالح لمدة 15 دقيقة ويُستخدم مرة واحدة.</small>
+      <small>{t("codeExpiry")}</small>
     </section>
   </main>;
 }

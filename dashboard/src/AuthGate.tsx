@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { acceptInvitation, getApiErrorMessage, getPendingInvitation, type PlatformMember } from "./api";
 import { isSupabaseAuthEnabled, supabase } from "./supabase";
+import { LanguageSwitcher, useI18n } from "./i18n";
 
 type AuthGateProps = {
   children: (auth: DashboardAuth) => ReactNode;
@@ -32,7 +33,7 @@ function passwordValidationError(password: string, confirmation: string) {
 }
 
 function Brand() {
-  return <div className="login-brand"><span className="brand-mark">K</span><div><strong>Kitzon</strong><small>منصة إدارة الهدر</small></div></div>;
+  return <><div className="auth-language"><LanguageSwitcher compact /></div><div className="login-brand"><span className="brand-mark">K</span><div><strong>Kitzon</strong><small>منصة إدارة الهدر</small></div></div></>;
 }
 
 type InvitationDetails = { organization_name: string; role: PlatformMember["role"] };
@@ -44,6 +45,7 @@ const invitationRoleLabels: Record<PlatformMember["role"], string> = {
 };
 
 function InvitePasswordForm({ session, invitation }: { session: Session; invitation: InvitationDetails }) {
+  const { language } = useI18n();
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [passwordUpdated, setPasswordUpdated] = useState(false);
@@ -85,7 +87,7 @@ function InvitePasswordForm({ session, invitation }: { session: Session; invitat
   }
 
   return (
-    <main className="auth-shell" dir="rtl">
+    <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}>
       <form className="login-card" onSubmit={(event) => void finishInvitation(event)}>
         <Brand />
         <p className="eyebrow">قبول الدعوة</p>
@@ -105,6 +107,7 @@ function InvitePasswordForm({ session, invitation }: { session: Session; invitat
 }
 
 function InviteRoute({ session }: { session: Session }) {
+  const { language } = useI18n();
   const [invitation, setInvitation] = useState<InvitationDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -116,12 +119,13 @@ function InviteRoute({ session }: { session: Session }) {
       .finally(() => setLoading(false));
   }, [session.access_token]);
 
-  if (loading) return <main className="auth-shell" dir="rtl"><div className="auth-loader" /><p>جاري التحقق من الدعوة…</p></main>;
+  if (loading) return <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}><div className="auth-loader" /><p>جاري التحقق من الدعوة…</p></main>;
   if (invitation) return <InvitePasswordForm session={session} invitation={invitation} />;
-  return <main className="auth-shell" dir="rtl"><section className="login-card invite-error"><Brand /><p className="eyebrow">تعذر قبول الدعوة</p><h1>لا توجد دعوة معلّقة</h1><p>{error}</p><button type="button" onClick={() => window.location.replace("/")}>العودة إلى لوحة التحكم</button></section></main>;
+  return <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}><section className="login-card invite-error"><Brand /><p className="eyebrow">تعذر قبول الدعوة</p><h1>لا توجد دعوة معلّقة</h1><p>{error}</p><button type="button" onClick={() => window.location.replace("/")}>العودة إلى لوحة التحكم</button></section></main>;
 }
 
 export default function AuthGate({ children }: AuthGateProps) {
+  const { language } = useI18n();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(isSupabaseAuthEnabled);
   const [email, setEmail] = useState("");
@@ -145,10 +149,10 @@ export default function AuthGate({ children }: AuthGateProps) {
   }, []);
 
   if (!isSupabaseAuthEnabled) return children({});
-  if (loading) return <main className="auth-shell" dir="rtl"><div className="auth-loader" /><p>جاري التحقق من الجلسة…</p></main>;
+  if (loading) return <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}><div className="auth-loader" /><p>جاري التحقق من الجلسة…</p></main>;
   if (isInviteRoute) {
     if (session) return <InviteRoute session={session} />;
-    return <main className="auth-shell" dir="rtl"><section className="login-card invite-error"><Brand /><p className="eyebrow">تعذر قبول الدعوة</p><h1>رابط الدعوة غير صالح</h1><p>{linkError || "ربما انتهت صلاحية الرابط أو سبق استخدامه. اطلب من مسؤول المنصة إرسال دعوة جديدة."}</p><button type="button" onClick={() => window.location.replace("/")}>العودة إلى تسجيل الدخول</button></section></main>;
+    return <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}><section className="login-card invite-error"><Brand /><p className="eyebrow">تعذر قبول الدعوة</p><h1>رابط الدعوة غير صالح</h1><p>{linkError || "ربما انتهت صلاحية الرابط أو سبق استخدامه. اطلب من مسؤول المنصة إرسال دعوة جديدة."}</p><button type="button" onClick={() => window.location.replace("/")}>العودة إلى تسجيل الدخول</button></section></main>;
   }
   if (session) {
     return children({
@@ -170,7 +174,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   }
 
   return (
-    <main className="auth-shell" dir="rtl">
+    <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}>
       <form className="login-card" onSubmit={(event) => void handleSubmit(event)}>
         <Brand />
         <p className="eyebrow">مرحبًا بعودتك</p>
