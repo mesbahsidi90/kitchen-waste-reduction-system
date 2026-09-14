@@ -63,6 +63,12 @@ export function isDeviceUnauthorized(error: unknown) {
   return axios.isAxiosError(error) && error.response?.status === 401;
 }
 
+export function isRetryableWasteLogError(error: unknown) {
+  if (!axios.isAxiosError(error)) return false;
+  if (!error.response) return true;
+  return error.response.status === 408 || error.response.status === 429 || error.response.status >= 500;
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string) {
   if (!axios.isAxiosError(error)) return fallback;
   return (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message ?? fallback;

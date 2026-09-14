@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { claimDevice, clearDeviceToken, createWasteLog, getApiErrorMessage, getDeviceCatalog, getDeviceToken, isDeviceUnauthorized, type CatalogItem } from "./api";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { claimDevice, clearDeviceToken, createWasteLog, getApiErrorMessage, getDeviceCatalog, getDeviceToken, isDeviceUnauthorized, isRetryableWasteLogError, type CatalogItem, type WasteLogInput } from "./api";
+import { cacheDeviceCatalog, clearCachedDeviceCatalog, getCachedDeviceCatalog, getPendingWasteLogs, queueWasteLog, removePendingWasteLog } from "./offline-queue";
 import { connectToScale, isSerialSupported, type ScaleConnection } from "./serial-scale";
 import "./App.css";
 
@@ -18,20 +19,66 @@ const scaleLabels: Record<ScaleState, string> = {
 };
 
 export default function App() {
+  const [initialCatalog] = useState(() => getCachedDeviceCatalog());
   const [provisioned, setProvisioned] = useState(() => import.meta.env.DEV || Boolean(getDeviceToken()));
-  const [scaleId, setScaleId] = useState(DEFAULT_SCALE_ID);
+  const [scaleId, setScaleId] = useState(initialCatalog?.scale_id ?? DEFAULT_SCALE_ID);
   const [weight, setWeight] = useState(0);
-  const [categories, setCategories] = useState<CatalogItem[]>([]);
-  const [reasons, setReasons] = useState<CatalogItem[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [categories, setCategories] = useState<CatalogItem[]>(initialCatalog?.categories ?? []);
+  const [reasons, setReasons] = useState<CatalogItem[]>(initialCatalog?.reasons ?? []);
+  const [catalogLoading, setCatalogLoading] = useState(!initialCatalog);
   const [category, setCategory] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [message, setMessage] = useState<Message>({ kind: "idle", text: "" });
   const [scaleState, setScaleState] = useState<ScaleState>(() => isSerialSupported() ? "disconnected" : "unsupported");
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(() => getPendingWasteLogs().length);
+  const [syncing, setSyncing] = useState(false);
   const connectionRef = useRef<ScaleConnection | null>(null);
+  const syncingRef = useRef(false);
   const pendingEventId = useRef<string | null>(null);
   const isSubmitting = message.kind === "pending";
+
+  const syncPendingEvents = useCallback(async () => {
+    if (!navigator.onLine || syncingRef.current || !provisioned) return;
+    const pendingEvents = getPendingWasteLogs();
+    if (pendingEvents.length === 0) return;
+
+    syncingRef.current = true;
+    setSyncing(true);
+    setMessage({ kind: "pending", text: `جاري مزامنة ${pendingEvents.length.toLocaleString("ar-EG")} عمليات…` });
+    let synced = 0;
+    try {
+      for (const event of pendingEvents) {
+        try {
+          await createWasteLog(event);
+          setPendingCount(removePendingWasteLog(event.client_event_id));
+          synced += 1;
+        } catch (error) {
+          let stopSync = false;
+          if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
+            clearDeviceToken();
+            clearCachedDeviceCatalog();
+            setProvisioned(false);
+            stopSync = true;
+          } else if (isRetryableWasteLogError(error)) {
+            setMessage({ kind: "error", text: "تعذرت المزامنة مؤقتًا. سيحاول الكيوسك مجددًا عند عودة الاتصال." });
+            stopSync = true;
+          } else {
+            setMessage({ kind: "error", text: "توجد عملية معلّقة تحتاج مراجعة إعدادات الفرع." });
+          }
+          if (stopSync) break;
+        }
+      }
+      const remaining = getPendingWasteLogs().length;
+      setPendingCount(remaining);
+      if (remaining === 0 && synced > 0) {
+        setMessage({ kind: "success", text: "تمت مزامنة جميع العمليات المعلّقة." });
+      }
+    } finally {
+      syncingRef.current = false;
+      setSyncing(false);
+    }
+  }, [provisioned]);
 
   useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine);
@@ -46,11 +93,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Pending events are external persisted state synchronized when connectivity changes.
+    // oxlint-disable-next-line react/set-state-in-effect
+    if (isOnline && provisioned) void syncPendingEvents();
+  }, [isOnline, provisioned, syncPendingEvents]);
+
+  useEffect(() => {
+    if (!provisioned) return;
+    const interval = window.setInterval(() => {
+      if (navigator.onLine && getPendingWasteLogs().length > 0) void syncPendingEvents();
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [provisioned, syncPendingEvents]);
+
+  useEffect(() => {
     if (!provisioned) return;
     async function loadCatalog() {
       setCatalogLoading(true);
       try {
         const catalog = await getDeviceCatalog();
+        cacheDeviceCatalog(catalog);
         setScaleId(catalog.scale_id);
         setCategories(catalog.categories);
         setReasons(catalog.reasons);
@@ -58,9 +120,19 @@ export default function App() {
       } catch (error) {
         if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
           clearDeviceToken();
+          clearCachedDeviceCatalog();
           setProvisioned(false);
+        } else {
+          const cachedCatalog = getCachedDeviceCatalog();
+          if (cachedCatalog) {
+            setScaleId(cachedCatalog.scale_id);
+            setCategories(cachedCatalog.categories);
+            setReasons(cachedCatalog.reasons);
+            setMessage({ kind: "success", text: "تعذر تحديث القائمة؛ يستخدم الكيوسك آخر نسخة محفوظة." });
+          } else {
+            setMessage({ kind: "error", text: "تعذر تحميل أصناف الفرع. تحقق من إعداد الجهاز ثم أعد المحاولة." });
+          }
         }
-        setMessage({ kind: "error", text: "تعذر تحميل أصناف الفرع. تحقق من إعداد الجهاز ثم أعد المحاولة." });
       } finally {
         setCatalogLoading(false);
       }
@@ -111,22 +183,32 @@ export default function App() {
       setMessage({ kind: "error", text: "اختر الصنف والسبب قبل التسجيل." });
       return;
     }
+    pendingEventId.current ??= crypto.randomUUID();
+    const event: WasteLogInput = {
+      client_event_id: pendingEventId.current,
+      scale_id: scaleId,
+      weight_kg: weight,
+      category,
+      reason,
+    };
+
     if (!isOnline) {
-      setMessage({ kind: "error", text: "لا يوجد اتصال بالإنترنت. أعد المحاولة بعد عودة الاتصال." });
+      try {
+        setPendingCount(queueWasteLog(event));
+        pendingEventId.current = null;
+        setCategory(null);
+        setReason(null);
+        setMessage({ kind: "success", text: "تم حفظ العملية على الجهاز وستُرسل عند عودة الاتصال." });
+      } catch (error) {
+        setMessage({ kind: "error", text: error instanceof Error ? error.message : "تعذر حفظ العملية على الجهاز." });
+      }
       return;
     }
 
     setMessage({ kind: "pending", text: "جاري التسجيل…" });
-    pendingEventId.current ??= crypto.randomUUID();
 
     try {
-      await createWasteLog({
-        client_event_id: pendingEventId.current,
-        scale_id: scaleId,
-        weight_kg: weight,
-        category,
-        reason,
-      });
+      await createWasteLog(event);
       pendingEventId.current = null;
       setCategory(null);
       setReason(null);
@@ -134,15 +216,28 @@ export default function App() {
     } catch (error) {
       if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
         clearDeviceToken();
+        clearCachedDeviceCatalog();
         setProvisioned(false);
         return;
       }
-      setMessage({ kind: "error", text: "تعذر الاتصال بالخادم. اضغط تسجيل للمحاولة مجددًا." });
+      if (isRetryableWasteLogError(error)) {
+        try {
+          setPendingCount(queueWasteLog(event));
+          pendingEventId.current = null;
+          setCategory(null);
+          setReason(null);
+          setMessage({ kind: "success", text: "تعذر الوصول للخادم؛ حُفظت العملية وستُزامن تلقائيًا." });
+        } catch (queueError) {
+          setMessage({ kind: "error", text: queueError instanceof Error ? queueError.message : "تعذر حفظ العملية." });
+        }
+      } else {
+        setMessage({ kind: "error", text: getApiErrorMessage(error, "تعذر تسجيل العملية. راجع إعدادات الفرع.") });
+      }
     }
   }
 
   if (!provisioned) {
-    return <PairingScreen onPaired={(deviceCode) => { setScaleId(deviceCode); setProvisioned(true); }} />;
+    return <PairingScreen onPaired={(deviceCode) => { clearCachedDeviceCatalog(); setScaleId(deviceCode); setCategories([]); setReasons([]); setProvisioned(true); }} />;
   }
 
   return (
@@ -155,8 +250,11 @@ export default function App() {
         <div className="status-strip" aria-label="حالة النظام">
           <span className={isOnline ? "online" : "offline"}>{isOnline ? "متصل" : "دون إنترنت"}</span>
           <span className={scaleState === "connected" ? "online" : "offline"}>{scaleLabels[scaleState]}</span>
+          {pendingCount > 0 && <span className="queued">{pendingCount.toLocaleString("ar-EG")} معلّقة</span>}
         </div>
       </header>
+
+      {pendingCount > 0 && <aside className="sync-banner"><div><strong>عمليات محفوظة على الجهاز</strong><p>ستُرسل تلقائيًا عند توفر الاتصال.</p></div><button type="button" disabled={!isOnline || syncing} onClick={() => void syncPendingEvents()}>{syncing ? "جاري الإرسال…" : "مزامنة الآن"}</button></aside>}
 
       <section className="weight-panel" aria-labelledby="weight-title">
         <p id="weight-title">الوزن</p>
@@ -215,7 +313,7 @@ export default function App() {
         </div>
       </section>
 
-      <button className="submit-button" type="button" disabled={isSubmitting} onClick={() => void handleSend()}>
+      <button className="submit-button" type="button" disabled={isSubmitting || syncing} onClick={() => void handleSend()}>
         {isSubmitting ? "جاري التسجيل…" : `تسجيل ${weight.toFixed(3)} كجم`}
       </button>
 
