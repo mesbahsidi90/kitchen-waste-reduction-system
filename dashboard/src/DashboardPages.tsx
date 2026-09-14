@@ -19,9 +19,12 @@ import {
 } from "./api";
 import {
   createCategory,
+  createThresholdRule,
   createWasteReason,
   setCategoryActive,
+  setThresholdRuleActive,
   setWasteReasonActive,
+  updateThresholdRule,
   type WorkspaceData,
 } from "./workspace";
 
@@ -85,6 +88,9 @@ export function OverviewPage({ summary, logs, workspace, loading, colors }: {
   const onlineDevices = workspace.devices.filter((device) => device.status === "active" && isRecentlyOnline(device.last_seen_at)).length;
   const activeBranches = workspace.branches.filter((branch) => branch.status === "active").length;
   const isOwner = workspace.role === "organization_owner";
+  const exceededThresholds = workspace.thresholds.filter(
+    (rule) => rule.is_active && rule.current_grams >= rule.limit_grams,
+  );
 
   return (
     <>
@@ -95,7 +101,9 @@ export function OverviewPage({ summary, logs, workspace, loading, colors }: {
         <article className="kpi-card"><div className="kpi-icon amber">◉</div><div><span>الأجهزة المتصلة</span><strong>{onlineDevices.toLocaleString("ar-EG")} <small>/ {workspace.devices.length.toLocaleString("ar-EG")}</small></strong><p>نشطة خلال آخر ١٠ دقائق</p></div></article>
       </section>
 
-      {workspace.thresholds.length === 0 && (
+      {exceededThresholds.length > 0 ? (
+        <aside className="notice-card danger-notice"><span>!</span><div><strong>تم تجاوز {exceededThresholds.length.toLocaleString("ar-EG")} من حدود الهدر</strong><p>راجع صفحة حدود التنبيه لمعرفة الفرع أو الصنف المتجاوز.</p></div></aside>
+      ) : workspace.thresholds.length === 0 && (
         <aside className="notice-card"><span>⚑</span><div><strong>لا توجد حدود تنبيه مفعّلة</strong><p>أضف قواعد يومية أو أسبوعية لتتبّع التجاوزات مبكرًا.</p></div></aside>
       )}
 
@@ -316,11 +324,112 @@ export function CatalogPage({ workspace, onChanged }: { workspace: WorkspaceData
   </section>;
 }
 
-export function ThresholdsPage({ workspace }: { workspace: WorkspaceData }) {
-  if (workspace.thresholds.length === 0) return <section className="panel"><EmptyState title="لا توجد حدود تنبيه" description="لم تُضف قواعد مراقبة لهذا الفرع حتى الآن." /></section>;
+export function ThresholdsPage({ workspace, onChanged }: { workspace: WorkspaceData; onChanged: () => Promise<void> }) {
+  const availableBranches = workspace.branches.filter((branch) => branch.status === "active");
+  const [branchId, setBranchId] = useState(workspace.assignedBranchId ?? availableBranches[0]?.id ?? "");
+  const [categoryId, setCategoryId] = useState("");
+  const [period, setPeriod] = useState<"day" | "week" | "month">("day");
+  const [limitKg, setLimitKg] = useState("");
+  const [cooldownMinutes, setCooldownMinutes] = useState(60);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const branchNames = new Map(workspace.branches.map((branch) => [branch.id, branch.name]));
   const categoryNames = new Map(workspace.categories.map((category) => [category.id, category.name]));
-  return <section className="panel"><div className="panel-heading"><div><span className="section-kicker">المراقبة</span><h2>قواعد التنبيه</h2></div><span className="count-chip">{workspace.thresholds.length.toLocaleString("ar-EG")} قواعد</span></div><div className="table-wrapper"><table><thead><tr><th>النطاق</th><th>الفترة</th><th>الحد</th><th>مهلة التكرار</th><th>الحالة</th></tr></thead><tbody>{workspace.thresholds.map((rule) => <tr key={rule.id}><td><strong>{categoryNames.get(rule.category_id ?? "") ?? "إجمالي الفرع"}</strong><small className="table-subtitle">{branchNames.get(rule.branch_id) ?? "—"}</small></td><td>{periodLabels[rule.period]}</td><td className="weight-cell">{(rule.limit_grams / 1_000).toLocaleString("ar-EG")} كجم</td><td>{rule.cooldown_minutes.toLocaleString("ar-EG")} دقيقة</td><td><StatusBadge active={rule.is_active} /></td></tr>)}</tbody></table></div></section>;
+
+  const availableCategories = workspace.categories.filter(
+    (category) => category.branch_id === branchId && category.is_active,
+  );
+
+  function resetForm() {
+    setEditingRuleId(null);
+    setCategoryId("");
+    setPeriod("day");
+    setLimitKg("");
+    setCooldownMinutes(60);
+  }
+
+  function editRule(ruleId: string) {
+    const rule = workspace.thresholds.find((item) => item.id === ruleId);
+    if (!rule) return;
+    setEditingRuleId(rule.id);
+    setBranchId(rule.branch_id);
+    setCategoryId(rule.category_id ?? "");
+    setPeriod(rule.period);
+    setLimitKg(String(rule.limit_grams / 1_000));
+    setCooldownMinutes(rule.cooldown_minutes);
+    setError("");
+    setSuccess("");
+  }
+
+  async function saveRule(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    const input = {
+      branchId,
+      categoryId: categoryId || null,
+      period,
+      limitKg: Number(limitKg),
+      cooldownMinutes,
+    };
+    try {
+      if (editingRuleId) {
+        await updateThresholdRule(workspace, editingRuleId, input);
+        setSuccess("تم تحديث حد التنبيه.");
+      } else {
+        await createThresholdRule(workspace, input);
+        setSuccess("تمت إضافة حد التنبيه.");
+      }
+      resetForm();
+      await onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر حفظ حد التنبيه");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleRule(ruleId: string, active: boolean) {
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await setThresholdRuleActive(workspace, ruleId, active);
+      setSuccess(active ? "تم تفعيل حد التنبيه." : "تم إيقاف حد التنبيه.");
+      await onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر تحديث حد التنبيه");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <>
+    <section className="panel onboarding-panel">
+      <div className="panel-heading"><div><span className="section-kicker">المراقبة</span><h2>{editingRuleId ? "تعديل حد التنبيه" : "إضافة حد تنبيه"}</h2></div>{editingRuleId && <button type="button" className="secondary-action" onClick={resetForm}>إلغاء التعديل</button>}</div>
+      {availableBranches.length > 0 ? <form className="threshold-form" onSubmit={(event) => void saveRule(event)}>
+        {workspace.role === "organization_owner" && <label>الفرع<select required disabled={Boolean(editingRuleId)} value={branchId} onChange={(event) => { setBranchId(event.target.value); setCategoryId(""); }}>{availableBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
+        <label>النطاق<select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">إجمالي الفرع</option>{availableCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label>الفترة<select value={period} onChange={(event) => setPeriod(event.target.value as typeof period)}>{Object.entries(periodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label>الحد (كجم)<input type="number" min="0.001" max="1000000" step="0.001" required value={limitKg} onChange={(event) => setLimitKg(event.target.value)} placeholder="مثال: 10" /></label>
+        <button className="primary-action" type="submit" disabled={saving || !branchId || !limitKg}>{saving ? "جاري الحفظ…" : editingRuleId ? "حفظ التعديل" : "إضافة الحد"}</button>
+      </form> : <EmptyState title="لا يوجد فرع نشط" description="يجب تفعيل فرع قبل إضافة حدود التنبيه." />}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {success && <p className="success-banner" role="status">{success}</p>}
+    </section>
+
+    <section className="panel">
+      <div className="panel-heading"><div><span className="section-kicker">الحالة الحالية</span><h2>قواعد التنبيه</h2></div><span className="count-chip">{workspace.thresholds.length.toLocaleString("ar-EG")} قواعد</span></div>
+      {workspace.thresholds.length === 0 ? <EmptyState title="لا توجد حدود تنبيه" description="أضف أول قاعدة لمراقبة الهدر." /> : <div className="table-wrapper"><table><thead><tr><th>النطاق</th><th>الفترة</th><th>الاستهلاك / الحد</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>{workspace.thresholds.map((rule) => {
+        const exceeded = rule.is_active && rule.current_grams >= rule.limit_grams;
+        const progress = Math.min(100, (rule.current_grams / rule.limit_grams) * 100);
+        return <tr key={rule.id} className={exceeded ? "threshold-exceeded" : undefined}><td><strong>{categoryNames.get(rule.category_id ?? "") ?? "إجمالي الفرع"}</strong><small className="table-subtitle">{branchNames.get(rule.branch_id) ?? "—"}</small></td><td>{periodLabels[rule.period]}</td><td><div className={`threshold-usage ${exceeded ? "is-exceeded" : ""}`}><strong>{(rule.current_grams / 1_000).toLocaleString("ar-EG", { maximumFractionDigits: 3 })} / {(rule.limit_grams / 1_000).toLocaleString("ar-EG", { maximumFractionDigits: 3 })} كجم</strong><span><i style={{ width: `${progress}%` }} /></span></div></td><td>{rule.is_active ? <StatusBadge active={!exceeded} activeText="ضمن الحد" inactiveText="تم التجاوز" /> : <StatusBadge active={false} inactiveText="متوقف" />}</td><td><div className="row-actions"><button type="button" className="secondary-action compact-action" disabled={saving} onClick={() => editRule(rule.id)}>تعديل</button><button type="button" className="secondary-action compact-action" disabled={saving} onClick={() => void toggleRule(rule.id, !rule.is_active)}>{rule.is_active ? "إيقاف" : "تفعيل"}</button></div></td></tr>;
+      })}</tbody></table></div>}
+    </section>
+  </>;
 }
 
 function PlatformOrganizationsTable({ organizations, compact = false }: { organizations: PlatformOrganization[]; compact?: boolean }) {

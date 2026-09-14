@@ -174,7 +174,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
       case "catalog":
         return <CatalogPage workspace={workspace} onChanged={async () => { await loadWorkspace(); }} />;
       case "thresholds":
-        return <ThresholdsPage workspace={workspace} />;
+        return <ThresholdsPage workspace={workspace} onChanged={async () => { await loadWorkspace(); }} />;
       default:
         return <OverviewPage summary={summary} logs={logs} workspace={workspace} loading={analyticsLoading} colors={categoryColors} />;
     }

@@ -35,6 +35,7 @@ export type ThresholdRule = {
   limit_grams: number;
   cooldown_minutes: number;
   is_active: boolean;
+  current_grams: number;
 };
 
 export type WorkspaceData = {
@@ -118,11 +119,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
         .select("id, branch_id, name, is_active")
         .eq("organization_id", membership.organization_id)
         .order("name"),
-      supabase
-        .from("threshold_rules")
-        .select("id, branch_id, category_id, period, limit_grams, cooldown_minutes, is_active")
-        .eq("organization_id", membership.organization_id)
-        .order("created_at", { ascending: false }),
+      supabase.rpc("get_threshold_statuses"),
     ]);
 
   const firstError = [
@@ -213,4 +210,85 @@ export async function setWasteReasonActive(workspace: WorkspaceData, reasonId: s
     .eq("id", reason.id)
     .eq("organization_id", workspace.organization.id);
   if (error) throw new Error("تعذر تحديث حالة سبب الهدر");
+}
+
+export type ThresholdRuleInput = {
+  branchId: string;
+  categoryId: string | null;
+  period: ThresholdRule["period"];
+  limitKg: number;
+  cooldownMinutes: number;
+};
+
+function validateThresholdInput(workspace: WorkspaceData, input: ThresholdRuleInput) {
+  const branch = workspace.branches.find((item) => item.id === input.branchId && item.status === "active");
+  if (!branch) throw new Error("اختر فرعًا نشطًا");
+
+  if (input.categoryId) {
+    const category = workspace.categories.find(
+      (item) => item.id === input.categoryId && item.branch_id === branch.id && item.is_active,
+    );
+    if (!category) throw new Error("اختر صنفًا نشطًا من الفرع");
+  }
+
+  const limitGrams = Math.round(input.limitKg * 1_000);
+  if (!Number.isFinite(limitGrams) || limitGrams < 1 || limitGrams > 1_000_000_000) {
+    throw new Error("حد الهدر يجب أن يكون أكبر من صفر");
+  }
+  if (!Number.isInteger(input.cooldownMinutes) || input.cooldownMinutes < 5 || input.cooldownMinutes > 10_080) {
+    throw new Error("مهلة تكرار التنبيه يجب أن تكون بين 5 دقائق و7 أيام");
+  }
+
+  return { branch, limitGrams };
+}
+
+export async function createThresholdRule(workspace: WorkspaceData, input: ThresholdRuleInput) {
+  const { branch, limitGrams } = validateThresholdInput(workspace, input);
+  const { error } = await requireSupabaseClient().from("threshold_rules").insert({
+    organization_id: workspace.organization.id,
+    branch_id: branch.id,
+    category_id: input.categoryId,
+    period: input.period,
+    limit_grams: limitGrams,
+    cooldown_minutes: input.cooldownMinutes,
+  });
+  if (error?.code === "23505") throw new Error("توجد قاعدة لنفس النطاق والفترة بالفعل");
+  if (error) throw new Error("تعذر إضافة حد التنبيه");
+}
+
+export async function updateThresholdRule(
+  workspace: WorkspaceData,
+  ruleId: string,
+  input: ThresholdRuleInput,
+) {
+  const rule = workspace.thresholds.find((item) => item.id === ruleId);
+  if (!rule) throw new Error("قاعدة التنبيه غير موجودة");
+  if (rule.branch_id !== input.branchId) throw new Error("لا يمكن نقل القاعدة إلى فرع آخر");
+
+  const { limitGrams } = validateThresholdInput(workspace, input);
+  const { error } = await requireSupabaseClient()
+    .from("threshold_rules")
+    .update({
+      category_id: input.categoryId,
+      period: input.period,
+      limit_grams: limitGrams,
+      cooldown_minutes: input.cooldownMinutes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", rule.id)
+    .eq("organization_id", workspace.organization.id);
+  if (error?.code === "23505") throw new Error("توجد قاعدة لنفس النطاق والفترة بالفعل");
+  if (error) throw new Error("تعذر تحديث حد التنبيه");
+}
+
+export async function setThresholdRuleActive(workspace: WorkspaceData, ruleId: string, isActive: boolean) {
+  const rule = workspace.thresholds.find((item) => item.id === ruleId);
+  if (!rule) throw new Error("قاعدة التنبيه غير موجودة");
+
+  const { error } = await requireSupabaseClient()
+    .from("threshold_rules")
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", rule.id)
+    .eq("organization_id", workspace.organization.id);
+  if (error) throw new Error("تعذر تحديث حالة حد التنبيه");
 }

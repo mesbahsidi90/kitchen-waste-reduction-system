@@ -128,6 +128,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .compact-form label { display: grid; gap: 6px; color: #8fa0b6; font-size: 9px; }
 .compact-form input, .compact-form select { min-width: 0; padding: 9px 10px; border: 1px solid #304058; border-radius: 8px; color: #e5ebf3; background: #111a29; font: inherit; }
 .compact-form > button { align-self: end; }
+.threshold-form { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) auto; align-items: end; gap: 10px; }
+.threshold-form label { display: grid; gap: 7px; color: #aab6c6; font-size: 10px; font-weight: 800; }
+.threshold-form input, .threshold-form select { min-width: 0; padding: 10px 11px; border: 1px solid #304058; border-radius: 9px; color: #e5ebf3; background: #0d1523; font: inherit; }
+.threshold-usage { min-width: 180px; }
+.threshold-usage strong { display: block; margin-bottom: 7px; color: #a7f3d0; font-size: 10px; }
+.threshold-usage > span { display: block; width: 100%; height: 5px; overflow: hidden; border-radius: 999px; background: #26354a; }
+.threshold-usage i { display: block; height: 100%; border-radius: inherit; background: #34d399; }
+.threshold-usage.is-exceeded strong { color: #fda4af; }
+.threshold-usage.is-exceeded i { background: #f43f5e; }
+.threshold-exceeded { background: rgb(159 18 57 / .07); }
 .member-form { grid-template-columns: minmax(0, 1.2fr) minmax(130px, .7fr) minmax(130px, .7fr) auto; }
 .smtp-note { grid-column: 1 / -1; color: #66758c; font-size: 8px; }
 .inline-note { margin: -8px 0 14px; color: #fcd34d; font-size: 9px; }
@@ -270,6 +280,7 @@ tbody tr:hover { background: rgb(255 255 255 / .018); }
   .details-hero { align-items: flex-start; flex-direction: column; }
   .detail-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compact-form, .member-form { grid-template-columns: 1fr; }
+  .threshold-form { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

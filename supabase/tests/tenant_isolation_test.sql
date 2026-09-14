@@ -1,5 +1,5 @@
 begin;
-select plan(19);
+select plan(25);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-000000000001', 'owner-one@example.test'),
@@ -46,6 +46,8 @@ select ok(not has_table_privilege('anon', 'public.organizations', 'select'), 'an
 select ok(has_table_privilege('authenticated', 'public.waste_events', 'select'), 'authenticated users have explicit read grants');
 select ok(has_table_privilege('authenticated', 'public.categories', 'insert'), 'authenticated managers have an explicit category insert grant');
 select ok(has_table_privilege('authenticated', 'public.waste_reasons', 'insert'), 'authenticated managers have an explicit waste reason insert grant');
+select ok(has_table_privilege('authenticated', 'public.threshold_rules', 'insert'), 'authenticated managers have an explicit threshold insert grant');
+select ok(has_function_privilege('authenticated', 'public.get_threshold_statuses()', 'execute'), 'authenticated users can read threshold statuses');
 select ok(not has_column_privilege('authenticated', 'public.devices', 'api_key_hash', 'select'), 'device hashes are not readable by clients');
 select is(
   (select count(*) from public.waste_reasons where name in (
@@ -119,6 +121,37 @@ select throws_ok(
   '42501',
   'new row violates row-level security policy for table "waste_reasons"',
   'a branch manager cannot add a waste reason to another tenant'
+);
+select lives_ok(
+  $$insert into public.threshold_rules (
+      id, organization_id, branch_id, category_id, period, limit_grams, cooldown_minutes
+    ) values (
+      '44444400-0000-4000-8000-000000000004', '11000000-0000-4000-8000-000000000001',
+      '11100000-0000-4000-8000-000000000001', null, 'day', 1000, 60
+    )$$,
+  'a branch manager can add a threshold to the assigned branch'
+);
+select is(
+  (select current_grams from public.get_threshold_statuses()
+    where id = '44444400-0000-4000-8000-000000000004'),
+  500::bigint,
+  'threshold status includes current calendar-period waste'
+);
+select lives_ok(
+  $$update public.threshold_rules set limit_grams = 750, updated_at = now()
+    where id = '44444400-0000-4000-8000-000000000004'$$,
+  'a branch manager can update a threshold in the assigned branch'
+);
+select throws_ok(
+  $$insert into public.threshold_rules (
+      organization_id, branch_id, category_id, period, limit_grams, cooldown_minutes
+    ) values (
+      '22000000-0000-4000-8000-000000000002', '22200000-0000-4000-8000-000000000002',
+      null, 'day', 1000, 60
+    )$$,
+  '42501',
+  'new row violates row-level security policy for table "threshold_rules"',
+  'a branch manager cannot add a threshold to another tenant'
 );
 
 select * from finish();
