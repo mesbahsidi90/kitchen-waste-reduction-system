@@ -23,6 +23,48 @@ function invitationLinkError() {
   return description ?? "";
 }
 
+function clearAuthCallbackParameters() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.searchParams.delete("code");
+  url.searchParams.delete("error");
+  url.searchParams.delete("error_code");
+  url.searchParams.delete("error_description");
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+}
+
+async function restoreAuthCallbackSession() {
+  const currentSession = await supabase!.auth.getSession();
+  if (currentSession.error) throw currentSession.error;
+  if (currentSession.data.session) return currentSession.data.session;
+
+  // Admin invitations and recovery emails can still redirect SPAs with an
+  // implicit token fragment even when the browser client normally uses PKCE.
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const accessToken = hash.get("access_token");
+  const refreshToken = hash.get("refresh_token");
+  if (accessToken && refreshToken) {
+    const result = await supabase!.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (result.error) throw result.error;
+    clearAuthCallbackParameters();
+    return result.data.session;
+  }
+
+  // Keep supporting PKCE callbacks when Supabase returns an authorization code.
+  const code = new URLSearchParams(window.location.search).get("code");
+  if (code) {
+    const result = await supabase!.auth.exchangeCodeForSession(code);
+    if (result.error) throw result.error;
+    clearAuthCallbackParameters();
+    return result.data.session;
+  }
+
+  return null;
+}
+
 function passwordValidationError(password: string, confirmation: string) {
   if (password.length < 10) return "استخدم 10 أحرف على الأقل";
   if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
@@ -131,28 +173,41 @@ export default function AuthGate({ children }: AuthGateProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [callbackError, setCallbackError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const isInviteRoute = window.location.pathname.replace(/\/+$/, "") === invitePath;
   const linkError = invitationLinkError();
 
   useEffect(() => {
     if (!isSupabaseAuthEnabled || !supabase) return;
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    let active = true;
+    void restoreAuthCallbackSession()
+      .then((restoredSession) => {
+        if (active) setSession(restoredSession);
+      })
+      .catch((caught) => {
+        if (active) {
+          setCallbackError(caught instanceof Error ? caught.message : "تعذر التحقق من رابط الدعوة");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setLoading(false);
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   if (!isSupabaseAuthEnabled) return children({});
   if (loading) return <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}><div className="auth-loader" /><p>جاري التحقق من الجلسة…</p></main>;
   if (isInviteRoute) {
     if (session) return <InviteRoute session={session} />;
-    return <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}><section className="login-card invite-error"><Brand /><p className="eyebrow">تعذر قبول الدعوة</p><h1>رابط الدعوة غير صالح</h1><p>{linkError || "ربما انتهت صلاحية الرابط أو سبق استخدامه. اطلب من مسؤول المنصة إرسال دعوة جديدة."}</p><button type="button" onClick={() => window.location.replace("/")}>العودة إلى تسجيل الدخول</button></section></main>;
+    return <main className="auth-shell" dir={language === "ar" ? "rtl" : "ltr"}><section className="login-card invite-error"><Brand /><p className="eyebrow">تعذر قبول الدعوة</p><h1>رابط الدعوة غير صالح</h1><p>{linkError || callbackError || "ربما انتهت صلاحية الرابط أو سبق استخدامه. اطلب من مسؤول المنصة إرسال دعوة جديدة."}</p><button type="button" onClick={() => window.location.replace("/")}>العودة إلى تسجيل الدخول</button></section></main>;
   }
   if (session) {
     return children({
