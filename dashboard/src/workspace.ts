@@ -25,6 +25,40 @@ export type CatalogItem = {
   name: string;
   is_active: boolean;
   color?: string;
+  cost_per_kg_dzd?: number | null;
+};
+
+export type DailyServiceMetric = {
+  id: string;
+  branch_id: string;
+  service_date: string;
+  meal_count: number;
+};
+
+export type OperationalAnalytics = {
+  from_date: string;
+  to_date: string;
+  period_days: number;
+  total_weight_kg: number;
+  total_count: number;
+  total_cost_dzd: number;
+  cost_coverage_percent: number;
+  meal_count: number;
+  meal_days_recorded: number;
+  waste_grams_per_meal: number;
+  cost_dzd_per_meal: number;
+  registration_quality_percent: number;
+  categories: Array<{ id: string; name: string; weight_kg: number; event_count: number; cost_dzd: number; percentage: number }>;
+  reasons: Array<{ id: string; name: string; weight_kg: number; event_count: number; percentage: number }>;
+  daily: Array<{ date: string; weight_kg: number; cost_dzd: number }>;
+};
+
+export type AnalyticsFilters = {
+  fromDate: string;
+  toDate: string;
+  branchId: string | null;
+  categoryId: string | null;
+  reasonId: string | null;
 };
 
 export type ThresholdRule = {
@@ -47,6 +81,7 @@ export type WorkspaceData = {
   categories: CatalogItem[];
   reasons: CatalogItem[];
   thresholds: ThresholdRule[];
+  serviceMetrics: DailyServiceMetric[];
 };
 
 const previewWorkspace: WorkspaceData = {
@@ -58,6 +93,7 @@ const previewWorkspace: WorkspaceData = {
   categories: [],
   reasons: [],
   thresholds: [],
+  serviceMetrics: [],
 };
 
 export const platformWorkspace: WorkspaceData = {
@@ -69,6 +105,7 @@ export const platformWorkspace: WorkspaceData = {
   categories: [],
   reasons: [],
   thresholds: [],
+  serviceMetrics: [],
 };
 
 export async function getWorkspaceData(): Promise<WorkspaceData> {
@@ -92,7 +129,9 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
     role: TenantRole;
   };
 
-  const [organizationResult, branchesResult, devicesResult, categoriesResult, reasonsResult, thresholdsResult] =
+  const metricsSince = new Date();
+  metricsSince.setDate(metricsSince.getDate() - 90);
+  const [organizationResult, branchesResult, devicesResult, categoriesResult, reasonsResult, thresholdsResult, serviceMetricsResult] =
     await Promise.all([
       supabase
         .from("organizations")
@@ -111,7 +150,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
         .order("name"),
       supabase
         .from("categories")
-        .select("id, branch_id, name, color, is_active")
+        .select("id, branch_id, name, color, is_active, cost_per_kg_dzd")
         .eq("organization_id", membership.organization_id)
         .order("name"),
       supabase
@@ -120,6 +159,12 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
         .eq("organization_id", membership.organization_id)
         .order("name"),
       supabase.rpc("get_threshold_statuses"),
+      supabase
+        .from("daily_service_metrics")
+        .select("id, branch_id, service_date, meal_count")
+        .eq("organization_id", membership.organization_id)
+        .gte("service_date", metricsSince.toISOString().slice(0, 10))
+        .order("service_date", { ascending: false }),
     ]);
 
   const firstError = [
@@ -129,6 +174,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
     categoriesResult.error,
     reasonsResult.error,
     thresholdsResult.error,
+    serviceMetricsResult.error,
   ].find(Boolean);
   if (firstError) throw firstError;
 
@@ -141,6 +187,7 @@ export async function getWorkspaceData(): Promise<WorkspaceData> {
     categories: (categoriesResult.data ?? []) as CatalogItem[],
     reasons: (reasonsResult.data ?? []) as CatalogItem[],
     thresholds: (thresholdsResult.data ?? []) as ThresholdRule[],
+    serviceMetrics: (serviceMetricsResult.data ?? []) as DailyServiceMetric[],
   };
 }
 
@@ -179,6 +226,62 @@ export async function setCategoryActive(workspace: WorkspaceData, categoryId: st
     .eq("id", category.id)
     .eq("organization_id", workspace.organization.id);
   if (error) throw new Error("تعذر تحديث حالة الصنف");
+}
+
+export async function setCategoryCost(workspace: WorkspaceData, categoryId: string, costPerKgDzd: number | null) {
+  const category = workspace.categories.find((item) => item.id === categoryId);
+  if (!category) throw new Error("الصنف غير موجود");
+  if (costPerKgDzd !== null && (!Number.isFinite(costPerKgDzd) || costPerKgDzd < 0 || costPerKgDzd > 1_000_000_000)) {
+    throw new Error("أدخل تكلفة صحيحة للكيلوغرام");
+  }
+
+  const { error } = await requireSupabaseClient()
+    .from("categories")
+    .update({ cost_per_kg_dzd: costPerKgDzd, updated_at: new Date().toISOString() })
+    .eq("id", category.id)
+    .eq("organization_id", workspace.organization.id);
+  if (error) throw new Error("تعذر حفظ تكلفة الصنف");
+}
+
+export async function saveDailyMealCount(
+  workspace: WorkspaceData,
+  input: { branchId: string; serviceDate: string; mealCount: number },
+) {
+  const branch = workspace.branches.find((item) => item.id === input.branchId && item.status === "active");
+  if (!branch) throw new Error("اختر فرعًا نشطًا");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.serviceDate)) throw new Error("اختر تاريخًا صحيحًا");
+  if (!Number.isInteger(input.mealCount) || input.mealCount < 0 || input.mealCount > 10_000_000) {
+    throw new Error("عدد الوجبات يجب أن يكون رقمًا صحيحًا");
+  }
+
+  const client = requireSupabaseClient();
+  const existing = workspace.serviceMetrics.find(
+    (item) => item.branch_id === branch.id && item.service_date === input.serviceDate,
+  );
+  const result = existing
+    ? await client.from("daily_service_metrics")
+        .update({ meal_count: input.mealCount, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+        .eq("organization_id", workspace.organization.id)
+    : await client.from("daily_service_metrics").insert({
+        organization_id: workspace.organization.id,
+        branch_id: branch.id,
+        service_date: input.serviceDate,
+        meal_count: input.mealCount,
+      });
+  if (result.error) throw new Error("تعذر حفظ عدد الوجبات");
+}
+
+export async function getOperationalAnalytics(filters: AnalyticsFilters): Promise<OperationalAnalytics> {
+  const { data, error } = await requireSupabaseClient().rpc("get_operational_analytics", {
+    p_from: filters.fromDate,
+    p_to: filters.toDate,
+    p_branch_id: filters.branchId,
+    p_category_id: filters.categoryId,
+    p_reason_id: filters.reasonId,
+  });
+  if (error || !data) throw new Error("تعذر تحميل التحليلات التشغيلية");
+  return data as OperationalAnalytics;
 }
 
 export async function createWasteReason(

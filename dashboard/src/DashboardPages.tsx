@@ -24,10 +24,16 @@ import {
   createCategory,
   createThresholdRule,
   createWasteReason,
+  getOperationalAnalytics,
+  saveDailyMealCount,
   setCategoryActive,
+  setCategoryCost,
   setThresholdRuleActive,
   setWasteReasonActive,
   updateThresholdRule,
+  type AnalyticsFilters,
+  type CatalogItem,
+  type OperationalAnalytics,
   type WorkspaceData,
 } from "./workspace";
 
@@ -326,6 +332,172 @@ export function CatalogPage({ workspace, onChanged }: { workspace: WorkspaceData
       {workspace.reasons.length === 0 ? <EmptyState title="لا توجد أسباب هدر" description="أضف أول سبب ليظهر في تطبيق الكيوسك." /> : <ul className="catalog-list">{workspace.reasons.map((item) => <li key={item.id}><span className="catalog-name"><span>{item.name}<small>{branchNames.get(item.branch_id) ?? "—"}</small></span></span><div className="catalog-actions"><StatusBadge active={item.is_active} /><button type="button" className="secondary-action compact-action" disabled={reasonSaving} onClick={() => void toggleReason(item.id, !item.is_active)}>{item.is_active ? "إيقاف" : "تفعيل"}</button></div></li>)}</ul>}
     </article>
   </section>;
+}
+
+function CategoryCostEditor({ category, workspace, disabled, onSaved }: {
+  category: CatalogItem;
+  workspace: WorkspaceData;
+  disabled: boolean;
+  onSaved: () => Promise<void>;
+}) {
+  const [value, setValue] = useState(category.cost_per_kg_dzd?.toString() ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await setCategoryCost(workspace, category.id, value === "" ? null : Number(value));
+      await onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر حفظ التكلفة");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <div className="cost-editor">
+    <label><span>دج / كجم</span><input type="number" min="0" max="1000000000" step="0.01" value={value} onChange={(event) => setValue(event.target.value)} placeholder="غير محدد" /></label>
+    <button type="button" className="secondary-action compact-action" disabled={disabled || saving || value === (category.cost_per_kg_dzd?.toString() ?? "")} onClick={() => void save()}>{saving ? "…" : "حفظ"}</button>
+    {error && <small className="field-error">{error}</small>}
+  </div>;
+}
+
+export function OperationsPage({ workspace, onChanged }: { workspace: WorkspaceData; onChanged: () => Promise<void> }) {
+  const availableBranches = workspace.branches.filter((branch) => branch.status === "active");
+  const today = new Date().toISOString().slice(0, 10);
+  const [branchId, setBranchId] = useState(workspace.assignedBranchId ?? availableBranches[0]?.id ?? "");
+  const [serviceDate, setServiceDate] = useState(today);
+  const existing = workspace.serviceMetrics.find((item) => item.branch_id === branchId && item.service_date === serviceDate);
+  const [mealCount, setMealCount] = useState(existing?.meal_count.toString() ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const branchNames = new Map(workspace.branches.map((branch) => [branch.id, branch.name]));
+  const visibleCategories = workspace.categories.filter((category) => !branchId || category.branch_id === branchId);
+  const recentMetrics = workspace.serviceMetrics
+    .filter((metric) => !branchId || metric.branch_id === branchId)
+    .slice(0, 14);
+
+  function selectMetric(nextBranchId: string, nextDate: string) {
+    const metric = workspace.serviceMetrics.find((item) => item.branch_id === nextBranchId && item.service_date === nextDate);
+    setBranchId(nextBranchId);
+    setServiceDate(nextDate);
+    setMealCount(metric?.meal_count.toString() ?? "");
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await saveDailyMealCount(workspace, { branchId, serviceDate, mealCount: Number(mealCount) });
+      setSuccess("تم حفظ عدد الوجبات وسيظهر في مؤشرات الهدر لكل وجبة.");
+      await onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر حفظ عدد الوجبات");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <>
+    <section className="operations-grid">
+      <article className="panel">
+        <div className="panel-heading"><div><span className="section-kicker">التشغيل اليومي</span><h2>عدد الوجبات</h2></div></div>
+        <p className="panel-intro">أدخل عدد الوجبات أو الضيوف يومياً لحساب الهدر والتكلفة لكل وجبة.</p>
+        {availableBranches.length > 0 ? <form className="meal-form" onSubmit={(event) => void submit(event)}>
+          {workspace.role === "organization_owner" && <label>الفرع<select required value={branchId} onChange={(event) => selectMetric(event.target.value, serviceDate)}>{availableBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
+          <label>التاريخ<input required type="date" max={today} value={serviceDate} onChange={(event) => selectMetric(branchId, event.target.value)} /></label>
+          <label>عدد الوجبات<input required type="number" min="0" max="10000000" step="1" value={mealCount} onChange={(event) => setMealCount(event.target.value)} placeholder="مثال: 250" /></label>
+          <button className="primary-action" type="submit" disabled={saving || !branchId || mealCount === ""}>{saving ? "جاري الحفظ…" : existing ? "تحديث العدد" : "حفظ العدد"}</button>
+        </form> : <EmptyState title="لا يوجد فرع نشط" description="يجب تفعيل فرع قبل تسجيل عدد الوجبات." />}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {success && <p className="success-banner" role="status">{success}</p>}
+        {recentMetrics.length > 0 && <div className="table-wrapper compact-table"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الوجبات</th></tr></thead><tbody>{recentMetrics.map((metric) => <tr key={metric.id}><td>{metric.service_date}</td><td>{branchNames.get(metric.branch_id) ?? "—"}</td><td>{metric.meal_count.toLocaleString("ar-EG")}</td></tr>)}</tbody></table></div>}
+      </article>
+
+      <article className="panel">
+        <div className="panel-heading"><div><span className="section-kicker">القيمة المالية</span><h2>تكلفة الأصناف</h2></div><span className="count-chip">دج / كجم</span></div>
+        <p className="panel-intro">تكلفة تقريبية للكيلوغرام. اتركها فارغة إذا لم تكن متوفرة.</p>
+        {workspace.role === "organization_owner" && <label className="inline-filter">الفرع<select value={branchId} onChange={(event) => selectMetric(event.target.value, serviceDate)}>{availableBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
+        {visibleCategories.length === 0 ? <EmptyState title="لا توجد أصناف" description="أضف الأصناف أولاً ثم حدد تكلفتها." /> : <ul className="cost-list">{visibleCategories.map((category) => <li key={category.id}><div className="cost-category"><i style={{ backgroundColor: category.color ?? "#64748b" }} /><div><strong>{category.name}</strong><small>{branchNames.get(category.branch_id) ?? "—"}</small></div></div><CategoryCostEditor category={category} workspace={workspace} disabled={saving} onSaved={onChanged} /></li>)}</ul>}
+      </article>
+    </section>
+  </>;
+}
+
+function AnalyticsRanking({ title, items, valueLabel }: {
+  title: string;
+  items: Array<{ id: string; name: string; weight_kg: number; percentage: number }>;
+  valueLabel?: (item: { weight_kg: number; percentage: number }) => string;
+}) {
+  return <article className="panel ranking-panel"><div className="panel-heading"><div><span className="section-kicker">الترتيب</span><h2>{title}</h2></div></div>{items.length === 0 ? <EmptyState title="لا توجد بيانات" description="غيّر الفترة أو الفلاتر لعرض النتائج." /> : <ol className="analytics-ranking">{items.slice(0, 8).map((item) => <li key={item.id}><div className="ranking-label"><strong>{item.name}</strong><span>{valueLabel ? valueLabel(item) : `${item.weight_kg.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} كجم`}</span></div><div className="ranking-track"><i style={{ width: `${Math.max(item.percentage, 2)}%` }} /></div><small>{item.percentage.toLocaleString("ar-EG", { maximumFractionDigits: 1 })}٪ من الهدر</small></li>)}</ol>}</article>;
+}
+
+export function AnalyticsPage({ workspace }: { workspace: WorkspaceData }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const start = new Date();
+  start.setDate(start.getDate() - 29);
+  const initialBranch = workspace.assignedBranchId;
+  const [filters, setFilters] = useState<AnalyticsFilters>({ fromDate: start.toISOString().slice(0, 10), toDate: today, branchId: initialBranch, categoryId: null, reasonId: null });
+  const [analytics, setAnalytics] = useState<OperationalAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const categories = workspace.categories.filter((item) => !filters.branchId || item.branch_id === filters.branchId);
+  const reasons = workspace.reasons.filter((item) => !filters.branchId || item.branch_id === filters.branchId);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setAnalytics(await getOperationalAnalytics(filters));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر تحميل التحليلات");
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    // Filtered analytics are remote state synchronized by this effect.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void load();
+  }, [load]);
+
+  function changeBranch(branchId: string) {
+    setFilters((current) => ({ ...current, branchId: branchId || null, categoryId: null, reasonId: null }));
+  }
+
+  const dailyAverage = analytics ? analytics.total_weight_kg / Math.max(analytics.period_days, 1) : 0;
+  const weeklyAverage = dailyAverage * 7;
+
+  return <>
+    <section className="panel analytics-filters">
+      <div className="panel-heading"><div><span className="section-kicker">نطاق التحليل</span><h2>الفلاتر</h2></div><button type="button" className="secondary-action" disabled={loading} onClick={() => void load()}>تحديث</button></div>
+      <div className="filter-grid">
+        <label>من<input type="date" max={filters.toDate} value={filters.fromDate} onChange={(event) => setFilters({ ...filters, fromDate: event.target.value })} /></label>
+        <label>إلى<input type="date" min={filters.fromDate} max={today} value={filters.toDate} onChange={(event) => setFilters({ ...filters, toDate: event.target.value })} /></label>
+        {workspace.role === "organization_owner" && <label>الفرع<select value={filters.branchId ?? ""} onChange={(event) => changeBranch(event.target.value)}><option value="">كل الفروع</option>{workspace.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
+        <label>الصنف<select value={filters.categoryId ?? ""} onChange={(event) => setFilters({ ...filters, categoryId: event.target.value || null })}><option value="">كل الأصناف</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label>السبب<select value={filters.reasonId ?? ""} onChange={(event) => setFilters({ ...filters, reasonId: event.target.value || null })}><option value="">كل الأسباب</option>{reasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.name}</option>)}</select></label>
+      </div>
+    </section>
+    {error && <div className="error-banner" role="alert"><span>!</span><p>{error}</p><button type="button" onClick={() => void load()}>إعادة المحاولة</button></div>}
+    {loading || !analytics ? <div className="workspace-loader"><span /><p>جاري حساب المؤشرات…</p></div> : <>
+      <section className="kpi-grid analytics-kpis">
+        <article className="kpi-card kpi-primary"><div className="kpi-icon">↘</div><div><span>إجمالي الهدر</span><strong>{analytics.total_weight_kg.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} <small>كجم</small></strong><p>{analytics.total_count.toLocaleString("ar-EG")} عملية تسجيل</p></div></article>
+        <article className="kpi-card"><div className="kpi-icon amber">دج</div><div><span>تكلفة الهدر</span><strong>{analytics.total_cost_dzd.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} <small>دج</small></strong><p>تغطية أسعار {analytics.cost_coverage_percent.toLocaleString("ar-EG")}٪</p></div></article>
+        <article className="kpi-card"><div className="kpi-icon violet">◌</div><div><span>الهدر لكل وجبة</span><strong>{analytics.waste_grams_per_meal.toLocaleString("ar-EG", { maximumFractionDigits: 1 })} <small>غ</small></strong><p>{analytics.meal_count.toLocaleString("ar-EG")} وجبة مسجلة</p></div></article>
+        <article className="kpi-card"><div className="kpi-icon blue">✓</div><div><span>جودة بيانات الوجبات</span><strong>{Math.min(analytics.registration_quality_percent, 100).toLocaleString("ar-EG", { maximumFractionDigits: 1 })} <small>٪</small></strong><p>{analytics.meal_days_recorded.toLocaleString("ar-EG")} من {analytics.period_days.toLocaleString("ar-EG")} أيام</p></div></article>
+      </section>
+      <section className="analytics-secondary-kpis"><article><span>المتوسط اليومي</span><strong>{dailyAverage.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} كجم</strong></article><article><span>المتوسط الأسبوعي</span><strong>{weeklyAverage.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} كجم</strong></article><article><span>التكلفة لكل وجبة</span><strong>{analytics.cost_dzd_per_meal.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} دج</strong></article></section>
+      <section className="analytics-rankings"><AnalyticsRanking title="الأصناف الأكثر هدراً" items={analytics.categories} valueLabel={(item) => `${item.weight_kg.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} كجم`} /><AnalyticsRanking title="أسباب الهدر الأكثر تأثيراً" items={analytics.reasons} /></section>
+      <section className="panel"><div className="panel-heading"><div><span className="section-kicker">التطور اليومي</span><h2>الهدر والتكلفة حسب اليوم</h2></div></div>{analytics.daily.length === 0 ? <EmptyState title="لا توجد بيانات" description="ستظهر القيم اليومية بعد تسجيل الهدر." /> : <div className="table-wrapper"><table><thead><tr><th>التاريخ</th><th>الوزن</th><th>التكلفة المقدرة</th></tr></thead><tbody>{analytics.daily.map((day) => <tr key={day.date}><td>{day.date}</td><td className="weight-cell">{day.weight_kg.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} كجم</td><td>{day.cost_dzd.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} دج</td></tr>)}</tbody></table></div>}</section>
+    </>}
+  </>;
 }
 
 export function ThresholdsPage({ workspace, onChanged }: { workspace: WorkspaceData; onChanged: () => Promise<void> }) {

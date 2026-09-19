@@ -22,3 +22,4 @@ create index if not exists waste_events_organization_branch_device_fk_idx
 
 create index if not exists waste_events_organization_branch_reason_fk_idx
   on public.waste_events (organization_id, branch_id, reason_id);
+

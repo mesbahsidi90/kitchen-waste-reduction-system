@@ -144,6 +144,40 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .threshold-usage.is-exceeded strong { color: #fda4af; }
 .threshold-usage.is-exceeded i { background: #f43f5e; }
 .threshold-exceeded { background: rgb(159 18 57 / .07); }
+
+.operations-grid, .analytics-rankings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.panel-intro { margin: -4px 0 18px; color: #91a0b5; font-size: 14px; line-height: 1.7; }
+.meal-form, .filter-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); align-items: end; gap: 12px; }
+.meal-form label, .filter-grid label, .inline-filter { display: grid; gap: 7px; color: #aab6c6; font-size: 14px; font-weight: 800; }
+.meal-form input, .meal-form select, .filter-grid input, .filter-grid select, .inline-filter select { min-width: 0; padding: 11px 12px; border: 1px solid #304058; border-radius: 9px; color: #e5ebf3; background: #0d1523; font: inherit; }
+.compact-table { margin-top: 18px; max-height: 360px; }
+.cost-list { display: grid; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
+.cost-list > li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border: 1px solid #24334a; border-radius: 12px; background: #101a2a; }
+.cost-category { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cost-category > i { width: 12px; height: 38px; flex: 0 0 auto; border-radius: 999px; }
+.cost-category strong, .cost-category small { display: block; }
+.cost-category small { margin-top: 3px; color: #718198; font-size: 12px; }
+.cost-editor { display: flex; align-items: end; gap: 8px; position: relative; }
+.cost-editor label { display: grid; gap: 4px; color: #8fa0b8; font-size: 12px; font-weight: 800; }
+.cost-editor input { width: 130px; padding: 8px 9px; border: 1px solid #304058; border-radius: 8px; color: #e5ebf3; background: #0d1523; font: inherit; }
+.field-error { position: absolute; top: 100%; inset-inline-end: 0; width: 220px; color: #fda4af; font-size: 11px; }
+.analytics-filters { margin-bottom: 18px; }
+.filter-grid { grid-template-columns: repeat(5, minmax(120px, 1fr)); }
+.analytics-kpis { margin-top: 0; }
+.analytics-secondary-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: -2px 0 18px; }
+.analytics-secondary-kpis article { padding: 15px 18px; border: 1px solid #26364d; border-radius: 12px; background: #101a2a; }
+.analytics-secondary-kpis span, .analytics-secondary-kpis strong { display: block; }
+.analytics-secondary-kpis span { color: #8190a6; font-size: 13px; }
+.analytics-secondary-kpis strong { margin-top: 7px; color: #e8edf5; font-size: 19px; }
+.analytics-rankings { margin-bottom: 18px; }
+.analytics-ranking { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: ranking; }
+.analytics-ranking li { counter-increment: ranking; }
+.ranking-label { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ranking-label strong::before { content: counter(ranking); display: inline-grid; place-items: center; width: 24px; height: 24px; margin-inline-end: 8px; border-radius: 7px; color: #5ee4c0; background: #12352f; font-size: 12px; }
+.ranking-label span { color: #dbe5f1; font-weight: 800; }
+.ranking-track { height: 8px; margin: 8px 0 5px; overflow: hidden; border-radius: 999px; background: #1e2b3f; }
+.ranking-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #20c997, #55e3bd); }
+.analytics-ranking small { color: #718198; font-size: 12px; }
 .member-form { grid-template-columns: minmax(0, 1.2fr) minmax(130px, .7fr) minmax(130px, .7fr) auto; }
 .smtp-note { grid-column: 1 / -1; color: #66758c; font-size: 12px; }
 .inline-note { margin: -8px 0 14px; color: #fcd34d; font-size: 14px; }
@@ -290,6 +324,14 @@ tbody tr:hover { background: rgb(255 255 255 / .018); }
   .detail-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compact-form, .member-form { grid-template-columns: 1fr; }
   .threshold-form { grid-template-columns: 1fr; }
+  .operations-grid, .analytics-rankings { grid-template-columns: 1fr; }
+  .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .meal-form, .filter-grid, .analytics-secondary-kpis { grid-template-columns: 1fr; }
+  .cost-list > li { align-items: stretch; flex-direction: column; }
+  .cost-editor input { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

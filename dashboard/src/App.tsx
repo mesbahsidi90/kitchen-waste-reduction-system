@@ -9,9 +9,11 @@ import {
 } from "./api";
 import AuthGate, { type DashboardAuth } from "./AuthGate";
 import {
+  AnalyticsPage,
   BranchesPage,
   CatalogPage,
   DevicesPage,
+  OperationsPage,
   OverviewPage,
   PlatformOrganizationsPage,
   PlatformDemoRequestsPage,
@@ -31,12 +33,14 @@ const defaultCategoryColors: Record<string, string> = {
   "وجبات مطبوخة": "#38bdf8",
 };
 
-type PageKey = "overview" | "organizations" | "demoRequests" | "records" | "branches" | "devices" | "catalog" | "thresholds";
+type PageKey = "overview" | "organizations" | "demoRequests" | "records" | "analytics" | "operations" | "branches" | "devices" | "catalog" | "thresholds";
 type NavigationItem = { key: PageKey; label: string; icon: string; ownerOnly?: boolean; staffOnly?: boolean };
 
 const navigation: NavigationItem[] = [
   { key: "overview", label: "نظرة عامة", icon: "⌂" },
   { key: "records", label: "سجل الهدر", icon: "≡" },
+  { key: "analytics", label: "التحليلات", icon: "▥" },
+  { key: "operations", label: "الوجبات والتكلفة", icon: "دج", staffOnly: true },
   { key: "branches", label: "الفروع", icon: "◇", ownerOnly: true },
   { key: "devices", label: "الأجهزة والموازين", icon: "◉", staffOnly: true },
   { key: "catalog", label: "الأصناف والأسباب", icon: "▦", staffOnly: true },
@@ -54,6 +58,8 @@ const pageTitles: Record<PageKey, { title: string; description: string }> = {
   organizations: { title: "العملاء والاشتراكات", description: "جميع المؤسسات وحالة استخدامها واشتراكاتها" },
   demoRequests: { title: "طلبات الديمو", description: "متابعة العملاء المحتملين القادمين من صفحة Kitzon" },
   records: { title: "سجل الهدر", description: "عمليات الهدر المرئية ضمن نطاق صلاحيتك" },
+  analytics: { title: "التحليلات", description: "الوزن والتكلفة والهدر لكل وجبة ضمن نطاق زمني مرن" },
+  operations: { title: "الوجبات والتكلفة", description: "إدخال عدد الوجبات وتكاليف الأصناف للمؤشرات التشغيلية" },
   branches: { title: "إدارة الفروع", description: "حالة فروع المؤسسة وتجهيزاتها التشغيلية" },
   devices: { title: "الأجهزة والموازين", description: "مراقبة اتصال الموازين المسجلة وحالتها" },
   catalog: { title: "الأصناف والأسباب", description: "القوائم المستخدمة عند تسجيل الهدر" },
@@ -190,6 +196,10 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
     switch (activePage) {
       case "records":
         return <section className="panel printable-report"><div className="panel-heading"><div><span className="section-kicker">السجل التشغيلي</span><h2>جميع العمليات</h2></div><div className="report-actions"><span className="count-chip">{logs.length.toLocaleString("ar-EG")}</span><button type="button" className="secondary-action" disabled={logs.length === 0} onClick={() => exportWasteCsv(logs)}>تصدير Excel</button><button type="button" className="secondary-action" disabled={logs.length === 0} onClick={() => window.print()}>طباعة / PDF</button></div></div><WasteTable logs={logs} loading={analyticsLoading} /></section>;
+      case "analytics":
+        return <AnalyticsPage workspace={workspace} />;
+      case "operations":
+        return <OperationsPage workspace={workspace} onChanged={async () => { await loadWorkspace(); }} />;
       case "branches":
         return <BranchesPage workspace={workspace} />;
       case "devices":
