@@ -54,6 +54,13 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function localDateValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function EmptyState({ title, description }: { title: string; description: string }) {
   return <div className="empty-state"><span>◇</span><strong>{title}</strong><p>{description}</p></div>;
 }
@@ -366,7 +373,7 @@ function CategoryCostEditor({ category, workspace, disabled, onSaved }: {
 
 export function OperationsPage({ workspace, onChanged }: { workspace: WorkspaceData; onChanged: () => Promise<void> }) {
   const availableBranches = workspace.branches.filter((branch) => branch.status === "active");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateValue();
   const [branchId, setBranchId] = useState(workspace.assignedBranchId ?? availableBranches[0]?.id ?? "");
   const [serviceDate, setServiceDate] = useState(today);
   const existing = workspace.serviceMetrics.find((item) => item.branch_id === branchId && item.service_date === serviceDate);
@@ -438,11 +445,11 @@ function AnalyticsRanking({ title, items, valueLabel }: {
 }
 
 export function AnalyticsPage({ workspace }: { workspace: WorkspaceData }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateValue();
   const start = new Date();
   start.setDate(start.getDate() - 29);
   const initialBranch = workspace.assignedBranchId;
-  const [filters, setFilters] = useState<AnalyticsFilters>({ fromDate: start.toISOString().slice(0, 10), toDate: today, branchId: initialBranch, categoryId: null, reasonId: null });
+  const [filters, setFilters] = useState<AnalyticsFilters>({ fromDate: localDateValue(start), toDate: today, branchId: initialBranch, categoryId: null, reasonId: null });
   const [analytics, setAnalytics] = useState<OperationalAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
