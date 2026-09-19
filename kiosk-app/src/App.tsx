@@ -33,8 +33,44 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const connectionRef = useRef<ScaleConnection | null>(null);
   const syncingRef = useRef(false);
+  const catalogSyncingRef = useRef(false);
   const pendingEventId = useRef<string | null>(null);
   const isSubmitting = message.kind === "pending";
+
+  const refreshCatalog = useCallback(async (showFeedback = false) => {
+    if (!provisioned || !navigator.onLine || catalogSyncingRef.current) return;
+    catalogSyncingRef.current = true;
+    if (showFeedback) setCatalogLoading(true);
+    try {
+      const catalog = await getDeviceCatalog();
+      cacheDeviceCatalog(catalog);
+      setScaleId(catalog.scale_id);
+      setCategories(catalog.categories);
+      setReasons(catalog.reasons);
+      setCategory((current) => current && catalog.categories.some((item) => item.name === current) ? current : null);
+      setReason((current) => current && catalog.reasons.some((item) => item.name === current) ? current : null);
+      if (showFeedback) setMessage({ kind: "idle", text: "" });
+    } catch (error) {
+      if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
+        clearDeviceToken();
+        clearCachedDeviceCatalog();
+        setProvisioned(false);
+      } else if (showFeedback) {
+        const cachedCatalog = getCachedDeviceCatalog();
+        if (cachedCatalog) {
+          setScaleId(cachedCatalog.scale_id);
+          setCategories(cachedCatalog.categories);
+          setReasons(cachedCatalog.reasons);
+          setMessage({ kind: "success", text: t("cachedCatalog") });
+        } else {
+          setMessage({ kind: "error", text: t("catalogError") });
+        }
+      }
+    } finally {
+      catalogSyncingRef.current = false;
+      if (showFeedback) setCatalogLoading(false);
+    }
+  }, [provisioned, t]);
 
   const syncPendingEvents = useCallback(async () => {
     if (!navigator.onLine || syncingRef.current || !provisioned) return;
@@ -92,9 +128,13 @@ export default function App() {
 
   useEffect(() => {
     // Pending events are external persisted state synchronized when connectivity changes.
-    // oxlint-disable-next-line react/set-state-in-effect
-    if (isOnline && provisioned) void syncPendingEvents();
-  }, [isOnline, provisioned, syncPendingEvents]);
+    if (isOnline && provisioned) {
+      // oxlint-disable-next-line react/set-state-in-effect
+      void syncPendingEvents();
+      // oxlint-disable-next-line react/set-state-in-effect
+      void refreshCatalog();
+    }
+  }, [isOnline, provisioned, refreshCatalog, syncPendingEvents]);
 
   useEffect(() => {
     if (!provisioned) return;
@@ -106,38 +146,25 @@ export default function App() {
 
   useEffect(() => {
     if (!provisioned) return;
-    async function loadCatalog() {
-      setCatalogLoading(true);
-      try {
-        const catalog = await getDeviceCatalog();
-        cacheDeviceCatalog(catalog);
-        setScaleId(catalog.scale_id);
-        setCategories(catalog.categories);
-        setReasons(catalog.reasons);
-        setMessage({ kind: "idle", text: "" });
-      } catch (error) {
-        if (isDeviceUnauthorized(error) && !import.meta.env.DEV) {
-          clearDeviceToken();
-          clearCachedDeviceCatalog();
-          setProvisioned(false);
-        } else {
-          const cachedCatalog = getCachedDeviceCatalog();
-          if (cachedCatalog) {
-            setScaleId(cachedCatalog.scale_id);
-            setCategories(cachedCatalog.categories);
-            setReasons(cachedCatalog.reasons);
-            setMessage({ kind: "success", text: t("cachedCatalog") });
-          } else {
-            setMessage({ kind: "error", text: t("catalogError") });
-          }
-        }
-      } finally {
-        setCatalogLoading(false);
-      }
-    }
+    // The initial catalog is external device state fetched after pairing.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void refreshCatalog(true);
+  }, [provisioned, refreshCatalog]);
 
-    void loadCatalog();
-  }, [provisioned, t]);
+  useEffect(() => {
+    if (!provisioned) return;
+    const refreshVisibleCatalog = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) void refreshCatalog();
+    };
+    const interval = window.setInterval(refreshVisibleCatalog, 15_000);
+    window.addEventListener("focus", refreshVisibleCatalog);
+    document.addEventListener("visibilitychange", refreshVisibleCatalog);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshVisibleCatalog);
+      document.removeEventListener("visibilitychange", refreshVisibleCatalog);
+    };
+  }, [provisioned, refreshCatalog]);
 
   async function handleScaleConnection() {
     if (connectionRef.current) {

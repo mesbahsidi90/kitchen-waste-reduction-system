@@ -1,4 +1,4 @@
-const CACHE_NAME = "kitzon-kiosk-v1";
+const CACHE_NAME = "kitzon-kiosk-v2";
 const APP_SHELL = ["/", "/app.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {

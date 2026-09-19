@@ -16,9 +16,9 @@ export default function WasteChart({ data, colors }: WasteChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 10, right: 4, left: 4, bottom: 6 }}>
           <CartesianGrid vertical={false} stroke="#223047" strokeDasharray="4 4" />
-          <XAxis dataKey="category" stroke="#66758c" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <YAxis stroke="#66758c" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} width={36} />
-          <Tooltip cursor={{ fill: "rgba(148, 163, 184, .04)" }} contentStyle={{ color: "#e8edf5", backgroundColor: "#172337", border: "1px solid #304058", borderRadius: 10, fontSize: 11 }} />
+          <XAxis dataKey="category" stroke="#66758c" tickLine={false} axisLine={false} tick={{ fontSize: 13 }} />
+          <YAxis stroke="#66758c" tickLine={false} axisLine={false} tick={{ fontSize: 13 }} width={42} />
+          <Tooltip cursor={{ fill: "rgba(148, 163, 184, .04)" }} contentStyle={{ color: "#e8edf5", backgroundColor: "#172337", border: "1px solid #304058", borderRadius: 10, fontSize: 13 }} />
           <Bar dataKey="weight_kg" name="الوزن (كجم)" radius={[7, 7, 2, 2]} maxBarSize={48}>
             {data.map((entry) => (
               <Cell key={entry.category} fill={colors[entry.category] ?? "#7e57c2"} />
