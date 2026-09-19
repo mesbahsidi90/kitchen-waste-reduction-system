@@ -69,6 +69,20 @@ export type PlatformOrganizationDetails = {
   members: PlatformMember[];
 };
 
+export type PlatformDemoRequest = {
+  id: string;
+  restaurant_name: string;
+  contact_name: string;
+  phone: string;
+  email: string | null;
+  city: string;
+  branch_count: number;
+  preferred_language: "ar" | "fr" | "en";
+  message: string | null;
+  status: "new" | "contacted" | "qualified" | "closed";
+  created_at: string;
+};
+
 export type PlatformOverview = {
   metrics: {
     organization_count: number;
@@ -110,6 +124,29 @@ function authorization(accessToken: string) {
 export async function getPlatformOverview(accessToken: string) {
   const response = await api.get<{ data: PlatformOverview }>("/platform/overview", authorization(accessToken));
   return response.data.data;
+}
+
+export async function getPlatformDemoRequests(
+  accessToken: string,
+  status?: PlatformDemoRequest["status"],
+) {
+  const response = await api.get<{ data: PlatformDemoRequest[] }>(
+    "/platform/demo-requests",
+    { ...authorization(accessToken), params: status ? { status } : undefined },
+  );
+  return response.data.data;
+}
+
+export async function updatePlatformDemoRequestStatus(
+  accessToken: string,
+  requestId: string,
+  status: PlatformDemoRequest["status"],
+) {
+  await api.patch(
+    `/platform/demo-requests/${requestId}/status`,
+    { status },
+    authorization(accessToken),
+  );
 }
 
 export async function createPlatformOrganization(

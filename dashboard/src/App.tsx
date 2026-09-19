@@ -14,6 +14,7 @@ import {
   DevicesPage,
   OverviewPage,
   PlatformOrganizationsPage,
+  PlatformDemoRequestsPage,
   PlatformOverviewPage,
   ThresholdsPage,
   WasteTable,
@@ -30,7 +31,7 @@ const defaultCategoryColors: Record<string, string> = {
   "وجبات مطبوخة": "#38bdf8",
 };
 
-type PageKey = "overview" | "organizations" | "records" | "branches" | "devices" | "catalog" | "thresholds";
+type PageKey = "overview" | "organizations" | "demoRequests" | "records" | "branches" | "devices" | "catalog" | "thresholds";
 type NavigationItem = { key: PageKey; label: string; icon: string; ownerOnly?: boolean; staffOnly?: boolean };
 
 const navigation: NavigationItem[] = [
@@ -45,11 +46,13 @@ const navigation: NavigationItem[] = [
 const platformNavigation: NavigationItem[] = [
   { key: "overview", label: "نظرة المنصة", icon: "⌂" },
   { key: "organizations", label: "العملاء والاشتراكات", icon: "◇" },
+  { key: "demoRequests", label: "طلبات الديمو", icon: "✦" },
 ];
 
 const pageTitles: Record<PageKey, { title: string; description: string }> = {
   overview: { title: "نظرة عامة", description: "مؤشرات الهدر وحالة التشغيل لحظة بلحظة" },
   organizations: { title: "العملاء والاشتراكات", description: "جميع المؤسسات وحالة استخدامها واشتراكاتها" },
+  demoRequests: { title: "طلبات الديمو", description: "متابعة العملاء المحتملين القادمين من صفحة Kitzon" },
   records: { title: "سجل الهدر", description: "عمليات الهدر المرئية ضمن نطاق صلاحيتك" },
   branches: { title: "إدارة الفروع", description: "حالة فروع المؤسسة وتجهيزاتها التشغيلية" },
   devices: { title: "الأجهزة والموازين", description: "مراقبة اتصال الموازين المسجلة وحالتها" },
@@ -158,13 +161,13 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
   function renderPage() {
     if (!workspace) return null;
     if (workspace.role === "platform_super_admin" && platformOverview) {
-      return activePage === "organizations"
-        ? <PlatformOrganizationsPage
+      if (activePage === "organizations") return <PlatformOrganizationsPage
             overview={platformOverview}
             accessToken={auth.accessToken!}
             onChanged={async () => { await loadWorkspace(); }}
-          />
-        : <PlatformOverviewPage overview={platformOverview} />;
+          />;
+      if (activePage === "demoRequests") return <PlatformDemoRequestsPage accessToken={auth.accessToken!} />;
+      return <PlatformOverviewPage overview={platformOverview} />;
     }
     switch (activePage) {
       case "records":

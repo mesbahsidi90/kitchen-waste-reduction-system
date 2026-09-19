@@ -57,6 +57,20 @@ export type PlatformOrganizationDetails = {
   members: PlatformMember[];
 };
 
+export type PlatformDemoRequest = {
+  id: string;
+  restaurant_name: string;
+  contact_name: string;
+  phone: string;
+  email: string | null;
+  city: string;
+  branch_count: number;
+  preferred_language: "ar" | "fr" | "en";
+  message: string | null;
+  status: "new" | "contacted" | "qualified" | "closed";
+  created_at: string;
+};
+
 export type InvitePlatformMemberInput = {
   email: string;
   role: PlatformMember["role"];
@@ -84,6 +98,8 @@ export interface PlatformAdminService {
   isPlatformAdmin(userId: string): Promise<boolean>;
   overview(): Promise<{ metrics: PlatformMetrics; organizations: PlatformOrganization[] }>;
   organizationDetails(organizationId: string): Promise<PlatformOrganizationDetails>;
+  listDemoRequests(status?: PlatformDemoRequest["status"]): Promise<PlatformDemoRequest[]>;
+  updateDemoRequestStatus(userId: string, requestId: string, status: PlatformDemoRequest["status"]): Promise<void>;
   createOrganization(userId: string, input: CreatePlatformOrganizationInput): Promise<{ organizationId: string; ownerInvited: boolean }>;
   createBranch(userId: string, organizationId: string, input: { name: string; timezone: string }): Promise<{ branchId: string }>;
   inviteMember(userId: string, organizationId: string, input: InvitePlatformMemberInput): Promise<{ membershipId: string }>;
@@ -164,6 +180,30 @@ export class SupabasePlatformAdminService implements PlatformAdminService {
       branches: (branchesResult.data ?? []) as PlatformBranch[],
       members,
     };
+  }
+
+  async listDemoRequests(status?: PlatformDemoRequest["status"]) {
+    let query = this.client
+      .from("demo_requests")
+      .select("id, restaurant_name, contact_name, phone, email, city, branch_count, preferred_language, message, status, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (status) query = query.eq("status", status);
+    const result = await query;
+    if (result.error) throw new ApplicationError(503, "DATABASE_ERROR", "تعذر تحميل طلبات الديمو");
+    return (result.data ?? []) as PlatformDemoRequest[];
+  }
+
+  async updateDemoRequestStatus(userId: string, requestId: string, status: PlatformDemoRequest["status"]) {
+    const result = await this.client
+      .from("demo_requests")
+      .update({ status })
+      .eq("id", requestId)
+      .select("id")
+      .maybeSingle();
+    if (result.error) throw new ApplicationError(503, "DATABASE_ERROR", "تعذر تحديث طلب الديمو");
+    if (!result.data) throw new ApplicationError(404, "DEMO_REQUEST_NOT_FOUND", "طلب الديمو غير موجود");
+    await this.audit(userId, "platform.demo_request.status_updated", "demo_request", requestId, { status });
   }
 
   async createOrganization(userId: string, input: CreatePlatformOrganizationInput) {
@@ -383,6 +423,10 @@ const subscriptionSchema = z.object({
   plan: z.enum(["trial", "starter", "growth", "enterprise"]),
   status: z.enum(["trialing", "active", "past_due", "canceled"]),
 });
+const demoRequestStatusSchema = z.object({
+  status: z.enum(["new", "contacted", "qualified", "closed"]),
+});
+const optionalDemoRequestStatusSchema = z.enum(["new", "contacted", "qualified", "closed"]).optional();
 const createOrganizationSchema = z.object({
   name: z.string().trim().min(2).max(120),
   slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
@@ -448,6 +492,26 @@ export function createPlatformAdminRouter(service: PlatformAdminService, require
   router.get("/overview", async (_request, response, next) => {
     try {
       response.json({ data: await service.overview() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/demo-requests", async (request, response, next) => {
+    try {
+      const status = optionalDemoRequestStatusSchema.parse(request.query.status);
+      response.json({ data: await service.listDemoRequests(status) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/demo-requests/:requestId/status", async (request, response, next) => {
+    try {
+      const requestId = idSchema.parse(request.params.requestId);
+      const { status } = demoRequestStatusSchema.parse(request.body);
+      await service.updateDemoRequestStatus(response.locals.userId as string, requestId, status);
+      response.status(204).end();
     } catch (error) {
       next(error);
     }

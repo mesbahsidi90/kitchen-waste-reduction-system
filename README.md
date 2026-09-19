@@ -6,6 +6,7 @@
 
 ## بيئة التجربة المنشورة
 
+- الصفحة التعريفية وطلب الديمو: <https://kitzon-landing.pages.dev>
 - لوحة التحكم: <https://kitzon-dashboard.pages.dev>
 - تطبيق الكيوسك: <https://kitzon-kiosk.pages.dev>
 - حالة API: <https://kitzon-api.onrender.com/health/ready>
@@ -63,6 +64,8 @@ npm run supabase:bootstrap -- --user-id <auth-user-uuid> --organization-name "م
 
 ### نقل بيانات SQLite الحالية
 
+يتابع Super Admin طلبات العرض الواردة من الصفحة التعريفية عبر صفحة «طلبات الديمو»، ويمكنه نقل الطلب بين حالات جديد، تم التواصل، مؤهل ومغلق. الجدول غير متاح مباشرةً لمتصفح العميل؛ القراءة والتحديث يمران عبر مسارات الخادم المحمية ويسجل تغيير الحالة في سجل التدقيق.
+
 بعد تهيئة المطعم والجهاز، نفّذ:
 
 ```bash
@@ -93,6 +96,9 @@ npm run supabase:lint
 - `POST /api/v1/waste-logs`
 - `GET /api/v1/waste-logs?limit=50&offset=0`
 - `GET /api/v1/analytics/summary`
+- `POST /api/v1/demo-requests` (عام، مع تحقق وحد طلبات)
+- `GET /api/v1/platform/demo-requests` (Super Admin)
+- `PATCH /api/v1/platform/demo-requests/:requestId/status` (Super Admin)
 - `POST /api/v1/devices` (مالك المؤسسة أو مدير الفرع)
 - `POST /api/v1/devices/claim` (اقتران الكيوسك لمرة واحدة)
 - `PATCH /api/v1/devices/:deviceId/disable` (مالك المؤسسة أو مدير الفرع)

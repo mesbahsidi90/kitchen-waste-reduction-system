@@ -1,17 +1,20 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   createPlatformBranch,
   createPlatformOrganization,
   createTenantDevice,
   disableTenantDevice,
   getApiErrorMessage,
+  getPlatformDemoRequests,
   getPlatformOrganization,
   invitePlatformMember,
   updateOrganizationStatus,
+  updatePlatformDemoRequestStatus,
   updateSubscription,
   type AnalyticsSummary,
   type CreatePlatformOrganizationInput,
   type PlatformMember,
+  type PlatformDemoRequest,
   type PlatformOrganization,
   type PlatformOrganizationDetails,
   type PlatformOverview,
@@ -34,6 +37,7 @@ const periodLabels = { day: "يومي", week: "أسبوعي", month: "شهري" 
 const planLabels = { trial: "تجريبي", starter: "أساسي", growth: "نمو", enterprise: "مؤسسات" } as const;
 const subscriptionLabels = { trialing: "فترة تجريبية", active: "نشط", past_due: "متأخر", canceled: "ملغي" } as const;
 const organizationStatusLabels = { trial: "تجريبي", active: "نشط", suspended: "موقوف", closed: "مغلق" } as const;
+const demoRequestStatusLabels = { new: "جديد", contacted: "تم التواصل", qualified: "مؤهل", closed: "مغلق" } as const;
 
 function isRecentlyOnline(lastSeen: string | null) {
   return Boolean(lastSeen) && Date.now() - new Date(lastSeen!).getTime() < 10 * 60 * 1_000;
@@ -691,4 +695,82 @@ export function PlatformOrganizationsPage({ overview, accessToken, onChanged }: 
         : <div className="table-wrapper"><table><thead><tr><th>المؤسسة</th><th>الخطة</th><th>حالة الاشتراك</th><th>الفروع</th><th>الأجهزة</th><th>المستخدمون</th><th>حالة المؤسسة</th><th>الإجراء</th></tr></thead><tbody>{organizations.map((organization) => <ManagedOrganizationRow key={organization.id} organization={organization} accessToken={accessToken} onChanged={onChanged} onSelect={() => setSelectedOrganizationId(organization.id)} />)}</tbody></table></div>}
     </section>
   </>;
+}
+
+function DemoRequestRow({ request, accessToken, onChanged }: {
+  request: PlatformDemoRequest;
+  accessToken: string;
+  onChanged: () => Promise<void>;
+}) {
+  const [status, setStatus] = useState(request.status);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await updatePlatformDemoRequestStatus(accessToken, request.id, status);
+      await onChanged();
+    } catch (caught) {
+      setError(getApiErrorMessage(caught, "تعذر تحديث حالة الطلب"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <>
+    <tr>
+      <td><strong>{request.restaurant_name}</strong><small className="table-subtitle">{request.city} · {request.branch_count.toLocaleString("ar-EG")} فرع</small></td>
+      <td><strong>{request.contact_name}</strong><a className="contact-link" href={`tel:${request.phone}`}>{request.phone}</a>{request.email && <a className="contact-link" href={`mailto:${request.email}`}>{request.email}</a>}</td>
+      <td>{request.message ? <span className="request-message" title={request.message}>{request.message}</span> : <span className="muted">—</span>}</td>
+      <td>{request.preferred_language.toUpperCase()}</td>
+      <td>{formatDate(request.created_at)}</td>
+      <td><select value={status} onChange={(event) => setStatus(event.target.value as PlatformDemoRequest["status"])} aria-label={`حالة طلب ${request.restaurant_name}`}>{Object.entries(demoRequestStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
+      <td><button type="button" className="save-row-button" disabled={saving || status === request.status} onClick={() => void save()}>{saving ? "جارٍ الحفظ…" : "حفظ"}</button></td>
+    </tr>
+    {error && <tr className="row-error"><td colSpan={7}>{error}</td></tr>}
+  </>;
+}
+
+export function PlatformDemoRequestsPage({ accessToken }: { accessToken: string }) {
+  const [requests, setRequests] = useState<PlatformDemoRequest[]>([]);
+  const [statusFilter, setStatusFilter] = useState<"all" | PlatformDemoRequest["status"]>("all");
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setRequests(await getPlatformDemoRequests(accessToken, statusFilter === "all" ? undefined : statusFilter));
+      setError("");
+    } catch (caught) {
+      setError(getApiErrorMessage(caught, "تعذر تحميل طلبات الديمو"));
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, statusFilter]);
+
+  useEffect(() => {
+    // Remote lead data is the external state synchronized by this effect.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const visibleRequests = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return requests;
+    return requests.filter((request) => [request.restaurant_name, request.contact_name, request.phone, request.email, request.city]
+      .some((value) => value?.toLowerCase().includes(normalized)));
+  }, [query, requests]);
+
+  return <section className="panel">
+    <div className="panel-heading platform-heading"><div><span className="section-kicker">المبيعات</span><h2>طلبات الديمو</h2></div><span className="count-chip">{visibleRequests.length.toLocaleString("ar-EG")} طلب</span></div>
+    {error && <div className="error-banner" role="alert"><span>!</span><p>{error}</p><button type="button" onClick={() => void load()}>إعادة المحاولة</button></div>}
+    <div className="platform-filters"><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="بحث بالمؤسسة أو المسؤول أو الهاتف…" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">كل الحالات</option>{Object.entries(demoRequestStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+    {loading ? <div className="table-skeleton"><i /><i /><i /></div> : visibleRequests.length === 0
+      ? <EmptyState title="لا توجد طلبات ديمو" description="ستظهر هنا الطلبات المرسلة من صفحة Kitzon التعريفية." />
+      : <div className="table-wrapper"><table><thead><tr><th>المؤسسة</th><th>التواصل</th><th>الاحتياج</th><th>اللغة</th><th>تاريخ الطلب</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>{visibleRequests.map((request) => <DemoRequestRow key={request.id} request={request} accessToken={accessToken} onChanged={load} />)}</tbody></table></div>}
+  </section>;
 }

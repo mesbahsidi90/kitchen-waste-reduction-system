@@ -162,6 +162,9 @@ tbody tr:hover { background: rgb(255 255 255 / .018); }
 .category-pill { display: inline-flex; padding: 5px 9px; border: 1px solid #304058; border-radius: 7px; color: #b9c5d5; background: #172237; }
 .muted { color: #718198; }
 .table-subtitle { display: block; margin-top: 4px; color: #66758c; font-size: 9px; }
+.contact-link { display: block; margin-top: 4px; color: #7dd3fc; font-size: 9px; text-decoration: none; direction: ltr; text-align: right; }
+.contact-link:hover { color: #bae6fd; text-decoration: underline; }
+.request-message { display: block; max-width: 260px; overflow: hidden; color: #9aa7b8; text-overflow: ellipsis; white-space: nowrap; }
 .plan-badge { display: inline-flex; padding: 5px 8px; border-radius: 7px; color: #cbd5e1; background: #1e293b; font-size: 9px; font-weight: 800; }
 .plan-growth { color: #6ee7b7; background: rgb(16 185 129 / .1); }
 .plan-enterprise { color: #c4b5fd; background: rgb(139 92 246 / .12); }

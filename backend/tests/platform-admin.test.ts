@@ -49,6 +49,20 @@ function fakeService(overrides: Partial<PlatformAdminService> = {}): PlatformAdm
       branches: [],
       members: [],
     }),
+    listDemoRequests: vi.fn().mockResolvedValue([{
+      id: "00000000-0000-4000-8000-000000000400",
+      restaurant_name: "مطاعم النور",
+      contact_name: "أحمد",
+      phone: "+213555000000",
+      email: "owner@example.com",
+      city: "الجزائر",
+      branch_count: 2,
+      preferred_language: "ar",
+      message: null,
+      status: "new",
+      created_at: "2026-09-14T00:00:00.000Z",
+    }]),
+    updateDemoRequestStatus: vi.fn().mockResolvedValue(undefined),
     createOrganization: vi.fn().mockResolvedValue({
       organizationId: "00000000-0000-4000-8000-000000000100",
       ownerInvited: true,
@@ -91,6 +105,36 @@ describe("platform administrator API", () => {
     const response = await request(testApp(fakeService())).get("/api/v1/platform/overview");
     expect(response.status).toBe(200);
     expect(response.body.data.metrics).toMatchObject({ organization_count: 1, device_count: 3 });
+  });
+
+  it("lists demo requests for a platform administrator", async () => {
+    const service = fakeService();
+    const response = await request(testApp(service)).get("/api/v1/platform/demo-requests?status=new");
+    expect(response.status).toBe(200);
+    expect(response.body.data[0].restaurant_name).toBe("مطاعم النور");
+    expect(service.listDemoRequests).toHaveBeenCalledWith("new");
+  });
+
+  it("updates a demo request status with validated values", async () => {
+    const service = fakeService();
+    const response = await request(testApp(service))
+      .patch("/api/v1/platform/demo-requests/00000000-0000-4000-8000-000000000400/status")
+      .send({ status: "contacted" });
+    expect(response.status).toBe(204);
+    expect(service.updateDemoRequestStatus).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000400",
+      "contacted",
+    );
+  });
+
+  it("rejects invalid demo request statuses", async () => {
+    const service = fakeService();
+    const response = await request(testApp(service))
+      .patch("/api/v1/platform/demo-requests/00000000-0000-4000-8000-000000000400/status")
+      .send({ status: "deleted" });
+    expect(response.status).toBe(400);
+    expect(service.updateDemoRequestStatus).not.toHaveBeenCalled();
   });
 
   it("allows an invited user to activate only their own authenticated membership", async () => {
