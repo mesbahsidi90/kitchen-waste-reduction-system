@@ -58,6 +58,8 @@ const translations: Record<string, { fr: string; en: string }> = {
   "تعذر فتح مساحة العمل.": { fr: "Impossible d’ouvrir l’espace de travail.", en: "Could not open the workspace." },
   "السجل التشغيلي": { fr: "Registre opérationnel", en: "Operational log" },
   "جميع العمليات": { fr: "Toutes les opérations", en: "All events" },
+  "تصدير Excel": { fr: "Exporter vers Excel", en: "Export to Excel" },
+  "طباعة / PDF": { fr: "Imprimer / PDF", en: "Print / PDF" },
   "مرحبًا بعودتك": { fr: "Bienvenue", en: "Welcome back" },
   "تسجيل الدخول إلى لوحة التحكم": { fr: "Connexion au tableau de bord", en: "Sign in to the dashboard" },
   "استخدم حساب المؤسسة للوصول إلى بيانات مطعمك وفروعك.": { fr: "Utilisez votre compte pour accéder aux données de vos établissements.", en: "Use your organization account to access your restaurant data." },

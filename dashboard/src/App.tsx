@@ -67,6 +67,24 @@ const roleLabels: Record<WorkspaceRole, string> = {
   platform_super_admin: "الأدمن الرئيسي",
 };
 
+function csvCell(value: string | number) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function exportWasteCsv(logs: WasteLog[]) {
+  const rows = [
+    ["الجهاز", "الوزن (كجم)", "الصنف", "السبب", "وقت التسجيل"],
+    ...logs.map((log) => [log.scale_id, log.weight_kg, log.category, log.reason, log.created_at]),
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `kitzon-waste-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function Dashboard({ auth }: { auth: DashboardAuth }) {
   const { language } = useI18n();
   const [activePage, setActivePage] = useState<PageKey>("overview");
@@ -171,7 +189,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
     }
     switch (activePage) {
       case "records":
-        return <section className="panel"><div className="panel-heading"><div><span className="section-kicker">السجل التشغيلي</span><h2>جميع العمليات</h2></div><span className="count-chip">{logs.length.toLocaleString("ar-EG")}</span></div><WasteTable logs={logs} loading={analyticsLoading} /></section>;
+        return <section className="panel printable-report"><div className="panel-heading"><div><span className="section-kicker">السجل التشغيلي</span><h2>جميع العمليات</h2></div><div className="report-actions"><span className="count-chip">{logs.length.toLocaleString("ar-EG")}</span><button type="button" className="secondary-action" disabled={logs.length === 0} onClick={() => exportWasteCsv(logs)}>تصدير Excel</button><button type="button" className="secondary-action" disabled={logs.length === 0} onClick={() => window.print()}>طباعة / PDF</button></div></div><WasteTable logs={logs} loading={analyticsLoading} /></section>;
       case "branches":
         return <BranchesPage workspace={workspace} />;
       case "devices":

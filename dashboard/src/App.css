@@ -91,6 +91,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .danger-notice > span { color: #fda4af; background: rgb(244 63 94 / .11); }
 .platform-overview-grid { grid-template-columns: minmax(0, 2fr) minmax(270px, .65fr); }
 .heading-actions, .form-actions { display: flex; align-items: center; gap: 9px; }
+.report-actions { display: flex; align-items: center; gap: 8px; }
 .primary-action, .secondary-action, .save-row-button { border-radius: 9px; font-size: 11px; font-weight: 900; cursor: pointer; }
 .primary-action { padding: 10px 14px; border: 0; color: #052e24; background: linear-gradient(135deg, #6ee7b7, #2dd4bf); }
 .secondary-action { padding: 9px 13px; border: 1px solid #304058; color: #aeb9c8; background: #162135; }
@@ -293,4 +294,16 @@ tbody tr:hover { background: rgb(255 255 255 / .018); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+@media print {
+  body { color: #111827; background: #fff; }
+  .sidebar, .topbar, .sidebar-overlay, .error-banner, .report-actions button { display: none !important; }
+  .app-shell, .content-shell, .content-area { display: block; min-height: auto; padding: 0; background: #fff; }
+  .content-area > :not(.printable-report) { display: none !important; }
+  .printable-report { margin: 0; padding: 0; border: 0; color: #111827; background: #fff; box-shadow: none; }
+  .printable-report h2, .printable-report td { color: #111827; }
+  .printable-report th { color: #374151; background: #f3f4f6; }
+  .printable-report th, .printable-report td { border-color: #d1d5db; }
+  .printable-report .weight-cell, .printable-report .device-cell, .printable-report .muted { color: #111827; }
 }
