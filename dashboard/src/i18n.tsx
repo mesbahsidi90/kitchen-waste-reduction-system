@@ -47,7 +47,7 @@ const translations: Record<string, { fr: string; en: string }> = {
   "موظف المطبخ": { fr: "Employé de cuisine", en: "Kitchen worker" },
   "الأدمن الرئيسي": { fr: "Super administrateur", en: "Super admin" },
   "النظام يعمل": { fr: "Système opérationnel", en: "System operational" },
-  "مزامنة تلقائية كل ١٥ ثانية": { fr: "Synchronisation toutes les 15 secondes", en: "Automatic sync every 15 seconds" },
+  "مزامنة تلقائية كل 15 ثانية": { fr: "Synchronisation toutes les 15 secondes", en: "Automatic sync every 15 seconds" },
   "كل المؤسسات": { fr: "Toutes les organisations", en: "All organizations" },
   "كل الفروع": { fr: "Tous les établissements", en: "All branches" },
   "نطاق الفرع": { fr: "Périmètre de l’établissement", en: "Branch scope" },
@@ -90,7 +90,7 @@ const translations: Record<string, { fr: string; en: string }> = {
   "ضمن نطاق العرض الحالي": { fr: "Dans le périmètre actuel", en: "Within the current scope" },
   "عملية موثقة": { fr: "Événements enregistrés", en: "Recorded events" },
   "متاحة للتسجيل": { fr: "Disponibles à la saisie", en: "Available for recording" },
-  "نشطة خلال آخر ١٠ دقائق": { fr: "Actifs durant les 10 dernières minutes", en: "Active in the last 10 minutes" },
+  "نشطة خلال آخر 10 دقائق": { fr: "Actifs durant les 10 dernières minutes", en: "Active in the last 10 minutes" },
   "الوزن": { fr: "Poids", en: "Weight" },
   "الصنف": { fr: "Catégorie", en: "Category" },
   "السبب": { fr: "Cause", en: "Reason" },
@@ -258,8 +258,41 @@ const translations: Record<string, { fr: string; en: string }> = {
   "الهدر والتكلفة حسب اليوم": { fr: "Gaspillage et coût par jour", en: "Waste and cost by day" },
   "التكلفة المقدرة": { fr: "Coût estimé", en: "Estimated cost" },
   "جاري حساب المؤشرات…": { fr: "Calcul des indicateurs…", en: "Calculating metrics…" },
+  "الإعدادات": { fr: "Paramètres", en: "Settings" },
+  "تفضيلات العرض ومعلومات مساحة العمل والحساب": { fr: "Préférences d’affichage, espace de travail et compte", en: "Display preferences, workspace and account information" },
+  "تفضيلات الواجهة": { fr: "Préférences d’interface", en: "Interface preferences" },
+  "العرض واللغة": { fr: "Affichage et langue", en: "Display & language" },
+  "لغة الواجهة": { fr: "Langue de l’interface", en: "Interface language" },
+  "يمكن تغيير اللغة في أي وقت، وتحفظ على هذا الجهاز.": { fr: "La langue peut être modifiée à tout moment et est enregistrée sur cet appareil.", en: "The language can be changed at any time and is saved on this device." },
+  "صيغة الأرقام": { fr: "Format des nombres", en: "Number format" },
+  "تستخدم جميع الشاشات الأرقام الإنجليزية لتسهيل قراءة الأوزان والتكاليف.": { fr: "Tous les écrans utilisent les chiffres latins pour faciliter la lecture des poids et des coûts.", en: "All screens use English digits to make weights and costs easier to read." },
+  "اتجاه الواجهة": { fr: "Direction de l’interface", en: "Interface direction" },
+  "يتغير تلقائياً حسب اللغة المختارة.": { fr: "S’adapte automatiquement à la langue sélectionnée.", en: "Changes automatically based on the selected language." },
+  "تلقائي": { fr: "Automatique", en: "Automatic" },
+  "الحساب": { fr: "Compte", en: "Account" },
+  "معلومات الوصول": { fr: "Informations d’accès", en: "Access information" },
+  "نطاق البيانات": { fr: "Périmètre des données", en: "Data scope" },
+  "جميع الفروع": { fr: "Tous les établissements", en: "All branches" },
+  "الفرع المحدد": { fr: "Établissement attribué", en: "Assigned branch" },
+  "حالة المزامنة": { fr: "État de synchronisation", en: "Sync status" },
+  "تحديث لوحة التحكم": { fr: "Actualisation du tableau de bord", en: "Dashboard refresh" },
+  "الأصناف في الكيوسك": { fr: "Catégories du kiosque", en: "Kiosk categories" },
+  "السجلات دون إنترنت": { fr: "Enregistrements hors ligne", en: "Offline records" },
+  "كل 15 ثانية": { fr: "Toutes les 15 secondes", en: "Every 15 seconds" },
+  "تُرسل عند عودة الاتصال": { fr: "Envoyés au retour de la connexion", en: "Sent when connection returns" },
+  "تُحفظ تفضيلات اللغة محلياً على الجهاز، بينما تبقى بيانات المؤسسة محمية ضمن صلاحيات الحساب.": { fr: "La langue est enregistrée localement sur l’appareil, tandis que les données de l’organisation restent protégées par les autorisations du compte.", en: "Language preferences are saved locally on the device, while organization data remains protected by account permissions." },
   "كجم": { fr: "kg", en: "kg" },
 };
+
+function englishNumberSymbols(value: string) {
+  const arabicDigits = "٠١٢٣٤٥٦٧٨٩";
+  return value
+    .replace(/[٠-٩]/g, (digit) => String(arabicDigits.indexOf(digit)))
+    .replaceAll("٬", ",")
+    .replaceAll("٫", ".")
+    .replaceAll("٪", "%")
+    .replaceAll("؜", "");
+}
 
 function initialLanguage(): Language {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -294,7 +327,7 @@ function sourceText(value: string) {
 function translateTree(root: Node, language: Language) {
   if (root.nodeType === Node.TEXT_NODE) {
     const original = sourceText(root.nodeValue ?? "");
-    const next = language === "ar" ? original : translateNodeText(original, language);
+    const next = englishNumberSymbols(language === "ar" ? original : translateNodeText(original, language));
     if (root.nodeValue !== next) root.nodeValue = next;
     return;
   }
@@ -303,7 +336,7 @@ function translateTree(root: Node, language: Language) {
   while ((node = walker.nextNode())) {
     if (node.parentElement?.closest("script, style")) continue;
     const original = sourceText(node.nodeValue ?? "");
-    const next = language === "ar" ? original : translateNodeText(original, language);
+    const next = englishNumberSymbols(language === "ar" ? original : translateNodeText(original, language));
     if (node.nodeValue !== next) node.nodeValue = next;
   }
   if (root instanceof Element) {
@@ -312,7 +345,7 @@ function translateTree(root: Node, language: Language) {
         const value = element.getAttribute(attribute);
         if (!value) return;
         const original = sourceText(value);
-        element.setAttribute(attribute, language === "ar" ? original : translateNodeText(original, language));
+        element.setAttribute(attribute, englishNumberSymbols(language === "ar" ? original : translateNodeText(original, language)));
       });
     });
   }

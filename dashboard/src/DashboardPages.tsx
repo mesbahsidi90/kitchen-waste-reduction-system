@@ -36,6 +36,7 @@ import {
   type OperationalAnalytics,
   type WorkspaceData,
 } from "./workspace";
+import { LanguageSwitcher } from "./i18n";
 
 const WasteChart = lazy(() => import("./WasteChart"));
 
@@ -115,7 +116,7 @@ export function OverviewPage({ summary, logs, workspace, loading, colors }: {
         <article className="kpi-card kpi-primary"><div className="kpi-icon">↘</div><div><span>إجمالي الهدر</span><strong>{summary.total_weight_kg.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} <small>كجم</small></strong><p>ضمن نطاق العرض الحالي</p></div></article>
         <article className="kpi-card"><div className="kpi-icon blue">≡</div><div><span>عمليات التسجيل</span><strong>{summary.total_count.toLocaleString("ar-EG")}</strong><p>عملية موثقة</p></div></article>
         <article className="kpi-card"><div className="kpi-icon violet">{isOwner ? "◇" : "▦"}</div><div><span>{isOwner ? "الفروع النشطة" : "الأصناف النشطة"}</span><strong>{(isOwner ? activeBranches : workspace.categories.filter((item) => item.is_active).length).toLocaleString("ar-EG")}</strong><p>{isOwner ? `من ${workspace.branches.length.toLocaleString("ar-EG")} فروع` : "متاحة للتسجيل"}</p></div></article>
-        <article className="kpi-card"><div className="kpi-icon amber">◉</div><div><span>الأجهزة المتصلة</span><strong>{onlineDevices.toLocaleString("ar-EG")} <small>/ {workspace.devices.length.toLocaleString("ar-EG")}</small></strong><p>نشطة خلال آخر ١٠ دقائق</p></div></article>
+        <article className="kpi-card"><div className="kpi-icon amber">◉</div><div><span>الأجهزة المتصلة</span><strong>{onlineDevices.toLocaleString("ar-EG")} <small>/ {workspace.devices.length.toLocaleString("ar-EG")}</small></strong><p>نشطة خلال آخر 10 دقائق</p></div></article>
       </section>
 
       {exceededThresholds.length > 0 ? (
@@ -505,6 +506,33 @@ export function AnalyticsPage({ workspace }: { workspace: WorkspaceData }) {
       <section className="panel"><div className="panel-heading"><div><span className="section-kicker">التطور اليومي</span><h2>الهدر والتكلفة حسب اليوم</h2></div></div>{analytics.daily.length === 0 ? <EmptyState title="لا توجد بيانات" description="ستظهر القيم اليومية بعد تسجيل الهدر." /> : <div className="table-wrapper"><table><thead><tr><th>التاريخ</th><th>الوزن</th><th>التكلفة المقدرة</th></tr></thead><tbody>{analytics.daily.map((day) => <tr key={day.date}><td>{day.date}</td><td className="weight-cell">{day.weight_kg.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} كجم</td><td>{day.cost_dzd.toLocaleString("ar-EG", { maximumFractionDigits: 2 })} دج</td></tr>)}</tbody></table></div>}</section>
     </>}
   </>;
+}
+
+export function SettingsPage({ workspace, email }: { workspace: WorkspaceData; email?: string }) {
+  const roleName = workspace.role === "platform_super_admin" ? "الأدمن الرئيسي"
+    : workspace.role === "organization_owner" ? "مسؤول المؤسسة"
+      : workspace.role === "branch_manager" ? "مدير المطبخ" : "موظف المطبخ";
+  const assignedBranch = workspace.branches.find((branch) => branch.id === workspace.assignedBranchId);
+
+  return <section className="settings-grid">
+    <article className="panel settings-card">
+      <div className="panel-heading"><div><span className="section-kicker">تفضيلات الواجهة</span><h2>العرض واللغة</h2></div><span className="settings-icon">◐</span></div>
+      <div className="settings-row"><div><strong>لغة الواجهة</strong><p>يمكن تغيير اللغة في أي وقت، وتحفظ على هذا الجهاز.</p></div><LanguageSwitcher /></div>
+      <div className="settings-row"><div><strong>صيغة الأرقام</strong><p>تستخدم جميع الشاشات الأرقام الإنجليزية لتسهيل قراءة الأوزان والتكاليف.</p></div><span className="setting-value" dir="ltr">1,234.50</span></div>
+      <div className="settings-row"><div><strong>اتجاه الواجهة</strong><p>يتغير تلقائياً حسب اللغة المختارة.</p></div><span className="setting-value">تلقائي</span></div>
+    </article>
+
+    <article className="panel settings-card">
+      <div className="panel-heading"><div><span className="section-kicker">الحساب</span><h2>معلومات الوصول</h2></div><span className="settings-icon">◎</span></div>
+      <dl className="settings-details"><div><dt>البريد الإلكتروني</dt><dd dir="ltr">{email ?? "—"}</dd></div><div><dt>الدور</dt><dd>{roleName}</dd></div><div><dt>مساحة العمل</dt><dd>{workspace.organization.name}</dd></div><div><dt>نطاق البيانات</dt><dd>{workspace.role === "organization_owner" || workspace.role === "platform_super_admin" ? "جميع الفروع" : assignedBranch?.name ?? "الفرع المحدد"}</dd></div></dl>
+    </article>
+
+    <article className="panel settings-card settings-wide">
+      <div className="panel-heading"><div><span className="section-kicker">التشغيل</span><h2>حالة المزامنة</h2></div><span className="status-badge is-active"><i />نشط</span></div>
+      <div className="settings-status-grid"><div><span>تحديث لوحة التحكم</span><strong>كل 15 ثانية</strong></div><div><span>الأصناف في الكيوسك</span><strong>كل 15 ثانية</strong></div><div><span>السجلات دون إنترنت</span><strong>تُرسل عند عودة الاتصال</strong></div></div>
+      <p className="settings-note">تُحفظ تفضيلات اللغة محلياً على الجهاز، بينما تبقى بيانات المؤسسة محمية ضمن صلاحيات الحساب.</p>
+    </article>
+  </section>;
 }
 
 export function ThresholdsPage({ workspace, onChanged }: { workspace: WorkspaceData; onChanged: () => Promise<void> }) {

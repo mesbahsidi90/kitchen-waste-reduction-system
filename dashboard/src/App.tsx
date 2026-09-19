@@ -18,6 +18,7 @@ import {
   PlatformOrganizationsPage,
   PlatformDemoRequestsPage,
   PlatformOverviewPage,
+  SettingsPage,
   ThresholdsPage,
   WasteTable,
 } from "./DashboardPages";
@@ -33,7 +34,7 @@ const defaultCategoryColors: Record<string, string> = {
   "وجبات مطبوخة": "#38bdf8",
 };
 
-type PageKey = "overview" | "organizations" | "demoRequests" | "records" | "analytics" | "operations" | "branches" | "devices" | "catalog" | "thresholds";
+type PageKey = "overview" | "organizations" | "demoRequests" | "records" | "analytics" | "operations" | "branches" | "devices" | "catalog" | "thresholds" | "settings";
 type NavigationItem = { key: PageKey; label: string; icon: string; ownerOnly?: boolean; staffOnly?: boolean };
 
 const navigation: NavigationItem[] = [
@@ -45,12 +46,14 @@ const navigation: NavigationItem[] = [
   { key: "devices", label: "الأجهزة والموازين", icon: "◉", staffOnly: true },
   { key: "catalog", label: "الأصناف والأسباب", icon: "▦", staffOnly: true },
   { key: "thresholds", label: "حدود التنبيه", icon: "⚑", staffOnly: true },
+  { key: "settings", label: "الإعدادات", icon: "⚙" },
 ];
 
 const platformNavigation: NavigationItem[] = [
   { key: "overview", label: "نظرة المنصة", icon: "⌂" },
   { key: "organizations", label: "العملاء والاشتراكات", icon: "◇" },
   { key: "demoRequests", label: "طلبات الديمو", icon: "✦" },
+  { key: "settings", label: "الإعدادات", icon: "⚙" },
 ];
 
 const pageTitles: Record<PageKey, { title: string; description: string }> = {
@@ -64,6 +67,7 @@ const pageTitles: Record<PageKey, { title: string; description: string }> = {
   devices: { title: "الأجهزة والموازين", description: "مراقبة اتصال الموازين المسجلة وحالتها" },
   catalog: { title: "الأصناف والأسباب", description: "القوائم المستخدمة عند تسجيل الهدر" },
   thresholds: { title: "حدود التنبيه", description: "القواعد النشطة لمراقبة تجاوز الهدر" },
+  settings: { title: "الإعدادات", description: "تفضيلات العرض ومعلومات مساحة العمل والحساب" },
 };
 
 const roleLabels: Record<WorkspaceRole, string> = {
@@ -185,6 +189,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
   function renderPage() {
     if (!workspace) return null;
     if (workspace.role === "platform_super_admin" && platformOverview) {
+      if (activePage === "settings") return <SettingsPage workspace={workspace} email={auth.email} />;
       if (activePage === "organizations") return <PlatformOrganizationsPage
             overview={platformOverview}
             accessToken={auth.accessToken!}
@@ -208,6 +213,8 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
         return <CatalogPage workspace={workspace} onChanged={async () => { await loadWorkspace(); }} />;
       case "thresholds":
         return <ThresholdsPage workspace={workspace} onChanged={async () => { await loadWorkspace(); }} />;
+      case "settings":
+        return <SettingsPage workspace={workspace} email={auth.email} />;
       default:
         return <OverviewPage summary={summary} logs={logs} workspace={workspace} loading={analyticsLoading} colors={categoryColors} />;
     }
@@ -223,7 +230,7 @@ function Dashboard({ auth }: { auth: DashboardAuth }) {
           <span className="nav-label">القائمة الرئيسية</span>
           {visibleNavigation.map((item) => <button key={item.key} type="button" className={activePage === item.key ? "active" : ""} aria-current={activePage === item.key ? "page" : undefined} onClick={() => navigate(item.key)}><span className="nav-icon">{item.icon}</span>{item.label}</button>)}
         </nav>
-        <div className="sidebar-footer"><span className="system-dot" /><div><strong>النظام يعمل</strong><small>مزامنة تلقائية كل ١٥ ثانية</small></div></div>
+        <div className="sidebar-footer"><span className="system-dot" /><div><strong>النظام يعمل</strong><small>مزامنة تلقائية كل 15 ثانية</small></div></div>
       </aside>
 
       <section className="content-shell">
